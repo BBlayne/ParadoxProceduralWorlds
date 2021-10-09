@@ -58,3 +58,7 @@ sysinfo.txt
 # Crashlytics generated file
 crashlytics-build.properties
 
+ParadoxProceduralWorlds/Library/
+ParadoxProceduralWorlds/Logs/
+ParadoxProceduralWorlds/obj/
+ParadoxProceduralWorlds/UserSettings/
