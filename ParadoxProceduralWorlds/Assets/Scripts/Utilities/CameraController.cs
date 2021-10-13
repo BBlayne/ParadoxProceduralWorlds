@@ -11,7 +11,27 @@ public class CameraController : MonoBehaviour
 
     private Vector2 m_scale = new Vector2(1, 1);
 
-    private CameraController _singletonCameraController;
+    private static CameraController _instance;
+
+    public CameraController Instance 
+    {
+        get {
+            if (_instance == null)
+            {
+                _instance = GameObject.FindObjectOfType<CameraController>();
+
+                if (_instance == null)
+                {
+                    GameObject _cameraController = new GameObject("CameraController");
+                    _cameraController.transform.position = new Vector3();
+                    _cameraController.transform.rotation = Quaternion.identity;
+                    _instance = _cameraController.AddComponent<CameraController>();
+                }
+            }
+
+            return _instance;
+        }
+    }
 
 
     public void SetResolution(int InWidth, int InHeight)

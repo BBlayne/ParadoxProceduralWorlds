@@ -4,35 +4,101 @@ using UnityEngine;
 
 public class WorldGenerator : MonoBehaviour
 {
-    // [todo] noise settings, move to controller later
-    public int Height = 512;
-    public int Width = 512;
-    public int Seed = 1000;
-    public int Octaves = 4;
-    public float Frequency = 100;
-    public float Lacunarity = 2.15f;
-    public float Persistence = 0.5f;
-    public Vector2 Offsets = new Vector2(0,0);
+    /* 
+     * World & Noise Settings 
+     * **********************
+     * [todo] move to or link to a UI controller
+     * 
+     * World setting is to specify broader settings
+     * like the size of the game world and number of 
+     * continents. Noise Settings is for how the shapes
+     * of the landmasses look like.
+     */
+    [System.Serializable]
+    public struct WorldSettings
+    {
+        [Range(256, 8192)]
+        public int _worldHeight;
+        [Range(256, 8192)]
+        public int _worldWidth;
+
+        public NoiseSettings _worldNoiseSettings;
+    }
+    
+    public WorldSettings worldSettings;
+    public WorldSettings Settings {
+        get {
+            return worldSettings;
+        }
+
+        set {
+            worldSettings = value;
+        }
+    }
+
+    public MapDisplay mapDisplay = null;
+
+    private RenderTexture _heightMap = null;
+
+    NoiseGenerator noiseGen = null;
 
     // Start is called before the first frame update
     void Start()
     {
+        noiseGen = new NoiseGenerator(Settings._worldNoiseSettings);
         // get height map
+        GenerateWorld();
+        UpdateMapDisplay();
+
+        if (_heightMap != null)
+        {
+            TextureGenerator.SaveTextureAsPNG(
+                TextureGenerator.CreateTexture2D(_heightMap, worldSettings._worldWidth, worldSettings._worldHeight),
+                "TestHeightMap"
+            );
+        }
     }
 
     public void GenerateWorld()
     {
-
+        GetHeightMap();
     }
 
-    void GetHeightMap()
+    private void UpdateMapDisplay()
     {
+        if (mapDisplay != null && _heightMap != null && mapDisplay.MapDisplayImgTarget != null)
+        {
+            _heightMap.filterMode = FilterMode.Point;
 
+            mapDisplay.MapDisplayImgTarget.texture = _heightMap;
+        }
+    }
+
+    private void GetHeightMap()
+    {
+        noiseGen.Settings = worldSettings._worldNoiseSettings;
+
+        if (_heightMap != null)
+        {
+            _heightMap.Release();
+            // ???
+            if (_heightMap != null)
+            {
+                Destroy(_heightMap);
+            }            
+        }
+
+        _heightMap = noiseGen.GenerateHeightMapRenderTexture(
+            worldSettings._worldNoiseSettings,
+            worldSettings._worldWidth,
+            worldSettings._worldHeight
+        );       
     }
 
     // Update is called once per frame
     void Update()
-    {
-        
+    {        
+        GenerateWorld();
+        UpdateMapDisplay();
     }
 }
