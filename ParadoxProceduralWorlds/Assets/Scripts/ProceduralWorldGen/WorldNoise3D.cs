@@ -86,6 +86,9 @@ public static class WorldNoise3D
 		InShader.SetFloat("noiseScale", (float)1 / InNoiseSettings.Frequency);
 		InShader.SetFloat("lacunarity", InNoiseSettings.Lacunarity);
 		InShader.SetVector("offset", InNoiseSettings.Offsets);
+		InShader.SetFloat("waterLevel", InNoiseSettings.WaterLevel);
+		InShader.SetFloat("aFalloffFactor", InNoiseSettings.AFalloffFactor);
+		InShader.SetFloat("bFalloffFactor", InNoiseSettings.BFalloffFactor);
 
 		InShader.SetInt("normalize", System.Convert.ToInt32(bNormalize));
 
@@ -123,6 +126,43 @@ public static class WorldNoise3D
 		int[] resInts = { InWidth, InHeight };
 
 		int kernel = shader.FindKernel("ComputeNoise");
+		shader.SetTexture(kernel, "Result", retTex);
+		SetShaderVars(shader, InNoiseSettings, bNormalize, kernel);
+		shader.SetInts("reses", resInts);
+
+		ComputeBuffer permBuffer = new ComputeBuffer(perm.Length, 4);
+		permBuffer.SetData(perm);
+		shader.SetBuffer(kernel, "perm", permBuffer);
+
+		shader.Dispatch(kernel, Mathf.CeilToInt(InWidth / 16f), Mathf.CeilToInt(InHeight / 16f), 1);
+
+		permBuffer.Release();
+
+		return retTex;
+	}
+
+	public static RenderTexture GetNoiseSilhouetteRtx
+	(
+		int InWidth,
+		int InHeight,
+		NoiseSettings InNoiseSettings,
+		bool bNormalize = true
+	)
+	{
+		RenderTexture retTex = new RenderTexture(InWidth, InHeight, 0);
+		retTex.enableRandomWrite = true;
+		retTex.Create();
+
+		ComputeShader shader = Resources.Load(shaderPath) as ComputeShader;
+		if (shader == null)
+		{
+			Debug.LogError(noShaderMsg);
+			return null;
+		}
+
+		int[] resInts = { InWidth, InHeight };
+
+		int kernel = shader.FindKernel("ComputeNoiseSilhouette");
 		shader.SetTexture(kernel, "Result", retTex);
 		SetShaderVars(shader, InNoiseSettings, bNormalize, kernel);
 		shader.SetInts("reses", resInts);

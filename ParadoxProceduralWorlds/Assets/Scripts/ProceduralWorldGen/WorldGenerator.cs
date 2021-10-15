@@ -39,6 +39,7 @@ public class WorldGenerator : MonoBehaviour
     public MapDisplay mapDisplay = null;
 
     private RenderTexture _heightMap = null;
+    private RenderTexture _silhouetteMap = null;
 
     NoiseGenerator noiseGen = null;
 
@@ -48,57 +49,88 @@ public class WorldGenerator : MonoBehaviour
         noiseGen = new NoiseGenerator(Settings._worldNoiseSettings);
         // get height map
         GenerateWorld();
-        UpdateMapDisplay();
-
-        if (_heightMap != null)
-        {
-            TextureGenerator.SaveTextureAsPNG(
-                TextureGenerator.CreateTexture2D(_heightMap, worldSettings._worldWidth, worldSettings._worldHeight),
-                "TestHeightMap"
-            );
-        }
+        UpdateMapDisplay(_heightMap);
+        SaveMapAsPNG("HeightMap", _heightMap);
+        SaveMapAsPNG("SilhouetteFalloffMap", _silhouetteMap);
     }
 
     public void GenerateWorld()
     {
-        GetHeightMap();
+        ResetRtx(_heightMap);
+        _heightMap = GetHeightMap();
+        ResetRtx(_silhouetteMap);
+        _silhouetteMap = GetHeightMapSilhouette();
     }
 
-    private void UpdateMapDisplay()
+    private void UpdateMapDisplay(RenderTexture InMapRtx)
     {
-        if (mapDisplay != null && _heightMap != null && mapDisplay.MapDisplayImgTarget != null)
+        if (mapDisplay != null && InMapRtx != null && mapDisplay.MapDisplayImgTarget != null)
         {
-            _heightMap.filterMode = FilterMode.Point;
+            InMapRtx.filterMode = FilterMode.Point;
 
-            mapDisplay.MapDisplayImgTarget.texture = _heightMap;
+            mapDisplay.MapDisplayImgTarget.texture = InMapRtx;
         }
     }
 
-    private void GetHeightMap()
+    private void ResetRtx(RenderTexture InRtx)
+    {
+        if (InRtx != null)
+        {
+            InRtx.Release();
+            // ???
+            if (InRtx != null)
+            {
+                Destroy(InRtx);
+            }            
+        }
+    }
+
+    private RenderTexture GetHeightMap()
     {
         noiseGen.Settings = worldSettings._worldNoiseSettings;
 
-        if (_heightMap != null)
-        {
-            _heightMap.Release();
-            // ???
-            if (_heightMap != null)
-            {
-                Destroy(_heightMap);
-            }            
-        }
-
-        _heightMap = noiseGen.GenerateHeightMapRenderTexture(
+        RenderTexture heightMap = noiseGen.GenerateHeightMapRenderTexture
+        (
             worldSettings._worldNoiseSettings,
             worldSettings._worldWidth,
             worldSettings._worldHeight
-        );       
+        );
+
+        return heightMap;
+    }
+
+    private RenderTexture GetHeightMapSilhouette()
+    {
+        noiseGen.Settings = worldSettings._worldNoiseSettings;
+
+        RenderTexture silhouette = noiseGen.GenerateHeightMapSilhouetteRTx
+        (
+            worldSettings._worldNoiseSettings,
+            worldSettings._worldWidth,
+            worldSettings._worldHeight
+        );
+
+        return silhouette;
+    }
+
+    void SaveMapAsPNG(string InFileName, RenderTexture InTex)
+    {
+        if (InTex != null)
+        {
+            TextureGenerator.SaveTextureAsPNG(
+                TextureGenerator.CreateTexture2D(InTex, worldSettings._worldWidth, worldSettings._worldHeight),
+                InFileName
+            );
+        }
     }
 
     // Update is called once per frame
     void Update()
-    {        
+    {
+        // the rendering seems to be killing my frames
+        // so probably these functions should only be called
+        // if/when there's a change in the settings.
         GenerateWorld();
-        UpdateMapDisplay();
+        UpdateMapDisplay(_silhouetteMap);
     }
 }

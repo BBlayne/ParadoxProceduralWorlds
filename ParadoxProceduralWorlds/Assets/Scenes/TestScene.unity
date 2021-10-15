@@ -436,7 +436,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 512, y: 512}
+  m_SizeDelta: {x: 1024, y: 512}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &641571936
 MonoBehaviour:
@@ -532,15 +532,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   worldSettings:
-    _worldHeight: 512
-    _worldWidth: 512
+    _worldHeight: 4096
+    _worldWidth: 8192
     _worldNoiseSettings:
       Seed: 0
-      Octaves: 6
-      Frequency: 100
-      Persistence: 0.5
-      Lacunarity: 2
-      Offsets: {x: 0, y: 0}
+      Octaves: 5
+      Frequency: 970
+      Persistence: 0.555
+      Lacunarity: 2.39
+      Offsets: {x: -15.4, y: 3.94}
+      WaterLevel: 0.504
+      AFalloffFactor: 3
+      BFalloffFactor: 2.2
   mapDisplay: {fileID: 825779250}
 --- !u!114 &825779250
 MonoBehaviour:

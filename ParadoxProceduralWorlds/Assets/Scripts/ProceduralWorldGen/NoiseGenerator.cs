@@ -8,13 +8,19 @@ public struct NoiseSettings
     public int Seed;
     [Range(0, 9)]
     public int Octaves;
-    [Range(10, 500)]
+    [Range(10, 1250)]
     public float Frequency;
     [Range(0.005f, 1.0f)]
     public float Persistence;
     [Range(0.10f, 3.5f)]
     public float Lacunarity;
     public Vector2 Offsets;
+    [Range(0.0f, 0.6f)]
+    public float WaterLevel;
+    [Range(1.0f, 4.0f)]
+    public float AFalloffFactor;
+    [Range(1.0f, 4.0f)]
+    public float BFalloffFactor;
 }
 
 public class NoiseGenerator
@@ -42,12 +48,16 @@ public class NoiseGenerator
     public NoiseGenerator()
     {
         _settings.Seed = 0;
+        _settings.AFalloffFactor = 3.0f;
+        _settings.BFalloffFactor = 2.2f;
         WorldNoise3D.seed = 0;
     }
 
     public NoiseGenerator(int InSeed = 0)
     {
         _settings.Seed = InSeed;
+        _settings.AFalloffFactor = 3.0f;
+        _settings.BFalloffFactor = 2.2f;
         WorldNoise3D.seed = InSeed;
     }
 
@@ -88,5 +98,11 @@ public class NoiseGenerator
         );
     }
 
+    // get noise Silhouette
+    public RenderTexture GenerateHeightMapSilhouetteRTx(NoiseSettings InNoiseSettings, int InWidth, int InHeight)
+    {
+        Settings = InNoiseSettings;
 
+        return WorldNoise3D.GetNoiseSilhouetteRtx(InWidth, InHeight, InNoiseSettings);
+    }
 }
