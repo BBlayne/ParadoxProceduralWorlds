@@ -36,6 +36,8 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
+    private WorldSettings _oldWorldSettings;
+
     public MapDisplay mapDisplay = null;
 
     private RenderTexture _heightMap = null;
@@ -47,11 +49,14 @@ public class WorldGenerator : MonoBehaviour
     void Start()
     {
         noiseGen = new NoiseGenerator(Settings._worldNoiseSettings);
+
+        _oldWorldSettings = worldSettings;
         // get height map
         GenerateWorld();
         UpdateMapDisplay(_heightMap);
         SaveMapAsPNG("HeightMap", _heightMap);
         SaveMapAsPNG("SilhouetteFalloffMap", _silhouetteMap);
+        UpdateMapDisplay(_silhouetteMap);
     }
 
     public void GenerateWorld()
@@ -130,7 +135,11 @@ public class WorldGenerator : MonoBehaviour
         // the rendering seems to be killing my frames
         // so probably these functions should only be called
         // if/when there's a change in the settings.
-        GenerateWorld();
-        UpdateMapDisplay(_silhouetteMap);
+        if (!_oldWorldSettings.Equals(worldSettings))
+        {
+            _oldWorldSettings = worldSettings;
+            GenerateWorld();
+            UpdateMapDisplay(_silhouetteMap);
+        }
     }
 }
