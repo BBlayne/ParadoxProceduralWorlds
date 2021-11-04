@@ -537,7 +537,7 @@ MonoBehaviour:
     _worldNoiseSettings:
       Seed: 0
       Octaves: 5
-      Frequency: 970
+      Frequency: 980
       Persistence: 0.555
       Lacunarity: 2.39
       Offsets: {x: -15.4, y: 3.94}

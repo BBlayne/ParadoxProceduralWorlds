@@ -44,19 +44,98 @@ public class WorldGenerator : MonoBehaviour
     private RenderTexture _silhouetteMap = null;
 
     NoiseGenerator noiseGen = null;
+    ShapeGenerator shapeGen = null;
+
+    private string AppPath = "";
 
     // Start is called before the first frame update
     void Start()
     {
+        AppPath = Application.dataPath + "/Temp/";
+
+        //var timer = new System.Diagnostics.Stopwatch();
+        //timer.Start();
+
         noiseGen = new NoiseGenerator(Settings._worldNoiseSettings);
 
         _oldWorldSettings = worldSettings;
         // get height map
+        noiseGen = new NoiseGenerator(Settings._worldNoiseSettings);
         GenerateWorld();
         UpdateMapDisplay(_heightMap);
+
+
         SaveMapAsPNG("HeightMap", _heightMap);
         SaveMapAsPNG("SilhouetteFalloffMap", _silhouetteMap);
+
+
         UpdateMapDisplay(_silhouetteMap);
+
+        shapeGen = new ShapeGenerator();
+
+        if (_silhouetteMap == null) return;
+
+        List<Region> regions = shapeGen.GetRegions(
+            TextureGenerator.CreateTexture2D(_silhouetteMap, worldSettings._worldWidth, worldSettings._worldHeight)
+        );
+
+        Debug.Log("Num of regions that have coords: " + regions.Count);
+
+        //timer.Stop();
+        //System.TimeSpan duration = timer.Elapsed;
+        //string timeElapsedMsg = "Time taken to execute start: " + duration.ToString(@"m\:ss\.fff");
+        //Debug.Log(timeElapsedMsg);
+
+        List<Vector4> colours = new List<Vector4>();
+
+        Random.InitState((int)System.DateTime.Now.Ticks);
+
+        for (int i = 0; i <= shapeGen.currentLabel; ++i)
+        {
+            colours.Add(Color.green);
+        }
+
+        for (int i = 0; i < regions.Count; ++i)
+        {
+            if (regions[i].RegionType == ERegionType.Land)
+            {
+                colours[regions[i].Label] = Color.white;
+            }
+            else
+            {
+                colours[regions[i].Label] = Color.black;
+            }
+            //Color randomColour = Random.ColorHSV(0, 1, 0, 1, 0.25f, 1, 1, 1);
+            //colours.Add(new Vector4(randomColour.r, randomColour.g, randomColour.b, 1));
+        }
+
+        //Texture2D SilhouetteMap =
+        //    TextureGenerator.CreateTexture2D(_silhouetteMap, worldSettings._worldWidth, worldSettings._worldHeight);
+
+        //RenderTexture landColouredTexture = TextureGenerator.GetRandomColourLandRegionsTexture
+        //(
+        //    worldSettings._worldWidth,
+        //    worldSettings._worldHeight,
+        //    colours.ToArray(),
+        //    SilhouetteMap.GetRawTextureData(),
+        //    shapeGen.LabelledWorldGrid
+        //);
+
+        //SaveMapAsPNG("colouredLandRegions", landColouredTexture);
+
+        //ResetRtx(landColouredTexture);
+
+        RenderTexture colouredTexture = TextureGenerator.GetRandomColourRegionsTexture
+        (
+            worldSettings._worldWidth,
+            worldSettings._worldHeight,
+            colours.ToArray(),
+            shapeGen.LabelledWorldGrid
+        );
+
+        SaveMapAsPNG("testSilhouetteRegions", colouredTexture);
+
+        ResetRtx(colouredTexture);
     }
 
     public void GenerateWorld()
@@ -118,13 +197,25 @@ public class WorldGenerator : MonoBehaviour
         return silhouette;
     }
 
-    void SaveMapAsPNG(string InFileName, RenderTexture InTex)
+    async void SaveMapAsPNG(string InFileName, RenderTexture InTex)
     {
         if (InTex != null)
         {
-            TextureGenerator.SaveTextureAsPNG(
+            //StartCoroutine(TextureGenerator.AsyncSaveTextureAsPNG(
+            //    TextureGenerator.CreateTexture2D(InTex, worldSettings._worldWidth, worldSettings._worldHeight),
+            //    InFileName
+            //));
+
+            //TextureGenerator.ThreadedSaveTextureAsPNG(
+            //    TextureGenerator.CreateTexture2D(InTex, worldSettings._worldWidth, worldSettings._worldHeight),
+            //    InFileName
+            //);
+
+            // attempting C# aync functionality
+            await TextureGenerator.SaveTextureAsPng(
                 TextureGenerator.CreateTexture2D(InTex, worldSettings._worldWidth, worldSettings._worldHeight),
-                InFileName
+                AppPath,
+                InFileName + ".png"
             );
         }
     }
@@ -139,7 +230,10 @@ public class WorldGenerator : MonoBehaviour
         {
             _oldWorldSettings = worldSettings;
             GenerateWorld();
-            UpdateMapDisplay(_silhouetteMap);
+            if (_silhouetteMap != null)
+            {
+                UpdateMapDisplay(_silhouetteMap);
+            }
         }
     }
 }

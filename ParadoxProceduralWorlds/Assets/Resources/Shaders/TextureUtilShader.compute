@@ -1,0 +1,64 @@
+﻿#pragma kernel ColourTexture
+
+uniform uint2 reses;
+
+//uniform float4 colours[MAX_COLOURS];
+
+uniform StructuredBuffer<float4> colours;
+uniform StructuredBuffer<int> LabelGrid;
+
+RWTexture2D<float4> Result;
+
+
+
+
+[numthreads(16, 16, 1)]
+void ColourTexture(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > reses.x || id.y > reses.y)
+    {
+        return;
+    }
+
+    uint idx = id.x;
+    uint idy = id.y;
+
+    int index = (idy * reses.x) + idx;
+
+    float4 pixelColour = colours[LabelGrid[index]];
+
+    Result[id.xy] = float4(pixelColour.x, pixelColour.y, pixelColour.z, 1);
+}
+
+#pragma kernel ColourLandTexture
+
+uniform StructuredBuffer<uint> silhouetteMap;
+
+[numthreads(16, 16, 1)]
+void ColourLandTexture(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > reses.x || id.y > reses.y)
+    {
+        return;
+    }
+
+    uint idx = id.x;
+    uint idy = id.y;
+
+    int index = (idy * reses.x) + idx;
+
+    uint ch1, ch2, ch3, ch4;
+    ch1 = silhouetteMap[index] >> 24;
+    ch2 = (silhouetteMap[index] & 0x00ff0000) >> 16;
+    ch3 = (silhouetteMap[index] & 0x0000ff00) >> 8;
+    ch4 = (silhouetteMap[index] & 0x000000ff);
+
+    float4 pixelColour = float4((float)ch4 / 255, (float)ch2 / 255, (float)ch3 / 255, 1);
+
+    if (ch4 > 0 || ch2 > 0 || ch3 > 0)
+    {
+        pixelColour = colours[LabelGrid[index]];
+    }
+
+    Result[id.xy] = float4(pixelColour.x, pixelColour.y, pixelColour.z, 1);
+}
