@@ -1,0 +1,18 @@
+﻿#pragma kernel DrawSubRegionPixels
+
+uniform uint2 reses;
+
+uniform uint inPixelsLength;
+
+uniform StructuredBuffer<float3> inSubRegionPixels;
+
+uniform float4 inSubRegionColour;
+
+RWTexture2D<float4> resultTex;
+
+[numthreads(16, 16, 1)]
+void DrawSubRegionPixels(uint3 id : SV_DispatchThreadID)
+{
+
+}
+

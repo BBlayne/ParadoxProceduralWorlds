@@ -1,0 +1,35 @@
+﻿#pragma kernel DrawPixelsToTexture
+
+uniform uint2 reses;
+
+uniform uint inPixelsLength;
+
+uniform StructuredBuffer<float3> inPixels;
+
+uniform float4 inColour;
+
+RWTexture2D<float4> resultTex;
+
+[numthreads(16, 16, 1)]
+void DrawPixelsToTexture(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > reses.x || id.y > reses.y)
+    {
+        return;
+    }
+
+    uint dx = id.x;
+    uint dy = id.y;
+
+    uint index = dy * reses.x + dx;
+
+    if (index > inPixelsLength)
+    {
+        return;
+    }
+
+    uint2 targetCoord = inPixels[index].xy;
+
+    resultTex[targetCoord.xy] = inColour;
+}
+

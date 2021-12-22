@@ -44,16 +44,19 @@ public class WorldGenerator : MonoBehaviour
     private RenderTexture _silhouetteMap = null;
 
     NoiseGenerator noiseGen = null;
-    ShapeGenerator shapeGen = null;
+    ProceduralWorlds.ShapeGenerator shapeGen = null;
 
     private string AppPath = "";
+
+    public delegate void OnRegionsGeneratedDelegate(RegionGenerator.RegionDebugInfo regionDebugInfo);
+    public static OnRegionsGeneratedDelegate regionsGeneratedDelegate;
 
     // Start is called before the first frame update
     void Start()
     {
         AppPath = Application.dataPath + "/Temp/";
 
-        //var timer = new System.Diagnostics.Stopwatch();
+        var timer = new System.Diagnostics.Stopwatch();
         //timer.Start();
 
         noiseGen = new NoiseGenerator(Settings._worldNoiseSettings);
@@ -71,7 +74,7 @@ public class WorldGenerator : MonoBehaviour
 
         UpdateMapDisplay(_silhouetteMap);
 
-        shapeGen = new ShapeGenerator();
+        shapeGen = new ProceduralWorlds.ShapeGenerator();
 
         if (_silhouetteMap == null) return;
 
@@ -95,11 +98,18 @@ public class WorldGenerator : MonoBehaviour
             colours.Add(Color.green);
         }
 
+        int largestRegionIndex = 0;
+        int largestRegionSize = int.MinValue;
         for (int i = 0; i < regions.Count; ++i)
         {
             if (regions[i].RegionType == ERegionType.Land)
             {
                 colours[regions[i].Label] = Color.white;
+                if (regions[i].Coords.Count > largestRegionSize)
+                {
+                    largestRegionIndex = i;
+                    largestRegionSize = regions[i].Coords.Count;
+                }
             }
             else
             {
@@ -125,17 +135,169 @@ public class WorldGenerator : MonoBehaviour
 
         //ResetRtx(landColouredTexture);
 
-        RenderTexture colouredTexture = TextureGenerator.GetRandomColourRegionsTexture
+        //RenderTexture colouredTexture = TextureGenerator.GetRandomColourRegionsTexture
+        //(
+        //    worldSettings._worldWidth,
+        //    worldSettings._worldHeight,
+        //    colours.ToArray(),
+        //    shapeGen.LabelledWorldGrid
+        //);
+
+        //SaveMapAsPNG("testSilhouetteRegions", colouredTexture);
+        //ResetRtx(colouredTexture);
+
+        /*
+         * Region Generation, focusing on the silhouette of the largest region
+         */
+
+        RegionGenerator regionGen = new RegionGenerator();
+
+        timer.Restart();
+        timer.Start();
+        RenderTexture largestRegionSilhouette = regionGen.GenerateRegionSilhouetteTexture
         (
+            regions[largestRegionIndex],
             worldSettings._worldWidth,
             worldSettings._worldHeight,
-            colours.ToArray(),
-            shapeGen.LabelledWorldGrid
+            Color.black
+        );
+        timer.Stop();
+        System.TimeSpan duration = timer.Elapsed;
+        string timeElapsedMsg = "Time taken to execute GenerateRegionSilhouetteTexture: " + duration.ToString(@"m\:ss\.fff");
+        Debug.Log(timeElapsedMsg);
+
+        SaveMapAsPNG("largestRegionSilhouette", largestRegionSilhouette);
+
+        /*
+         * Scaling the result for more manageable sampling/examination
+         */
+        
+        Vector2 scaling = new Vector2(16, 16);
+
+        Texture2D scaledSilhouetteRegion = TextureGenerator.CreateTexture2D(largestRegionSilhouette);
+        TextureGenerator.GetScaledRenderTextureGL
+        (
+            scaledSilhouetteRegion,
+            (int)(largestRegionSilhouette.width / scaling.x),
+            (int)(largestRegionSilhouette.height / scaling.y),
+            FilterMode.Point
         );
 
-        SaveMapAsPNG("testSilhouetteRegions", colouredTexture);
+        SaveMapAsPNG("scaledSilhouetteRegion", scaledSilhouetteRegion);
 
-        ResetRtx(colouredTexture);
+        Texture2D silhouetteRegionTexToScale = TextureGenerator.CreateTexture2D(largestRegionSilhouette);
+
+        // scaling the largest region silhouette (using a shader)
+        RenderTexture scaledSilhouetteRegionNN = TextureGenerator.GetScaledRenderTextureGPU(
+                silhouetteRegionTexToScale,
+                (int)(largestRegionSilhouette.width / scaling.x),
+                (int)(largestRegionSilhouette.height / scaling.y)
+        );
+
+        Texture2D scaledSilhouetteRegionNNTex = TextureGenerator.CreateTexture2D(scaledSilhouetteRegionNN);
+
+        SaveMapAsPNG("scaledSilhouetteRegionNN", scaledSilhouetteRegionNN);
+
+        // scaling the height map for sampling
+        RenderTexture scaledHeightMapNNRT = TextureGenerator.GetScaledRenderTextureGPU(
+                _heightMap,
+                (int)(_heightMap.width / scaling.x),
+                (int)(_heightMap.height / scaling.y)
+        );
+        SaveMapAsPNG("scaledHeightMapNNRT", scaledHeightMapNNRT);
+
+        Texture2D scaledHeightMapNNTex = TextureGenerator.CreateTexture2D(scaledHeightMapNNRT);
+
+        //timer.Restart();
+        //timer.Start();
+        //RegionGenerator.RegionInfo largestRegionInfo = regionGen.GenerateConstrainedDelaunayMeshForRegion
+        //    (
+        //        regions[largestRegionIndex],
+        //        1000
+        //    );
+
+        //List<Vector3> largestRegionMeshPixels = RegionDebug.DebugConstrainedDelaunayMeshToPixels
+        //    (
+        //        largestRegionInfo.DelaunayMesh, 
+        //        largestRegionInfo.BoundaryMesh
+        //    );
+
+        //RenderTexture ConstrainedDelaunayRegionTex = RegionDebug.DebugDrawConstainedDelaunayRegion
+        //(
+        //    largestRegionMeshPixels,
+        //    largestRegionSilhouette,
+        //    Color.red
+        //) as RenderTexture;
+
+        //timer.Stop();
+        //System.TimeSpan drawDelaunayDuration = timer.Elapsed;
+        //string drawDelaunayTimeElapsedMsg = "Time to create delaunay region texture: " + drawDelaunayDuration.ToString(@"m\:ss\.fff");
+        //Debug.Log(drawDelaunayTimeElapsedMsg);
+
+        //SaveMapAsPNG("ConstrainedDelaunayRegionTex", ConstrainedDelaunayRegionTex);
+
+        //ResetRtx(ConstrainedDelaunayRegionTex);
+
+        /*****************************
+         * Region Edge Detection
+         *****************************/
+        timer.Restart();
+        timer.Start();
+        List<Vector3> edgePixels = regionGen.GetScaledRegionEdges(regions[largestRegionIndex], scaling, scaledSilhouetteRegionNNTex);
+        Texture2D scaledRegionEdgesTex = RegionDebug.DisplayRegionEdgePixels(edgePixels, scaledSilhouetteRegionNNTex, Color.red);
+        SaveMapAsPNG("scaledRegionEdgesTex", scaledRegionEdgesTex);
+        timer.Stop();
+        System.TimeSpan regionEdgesDuration = timer.Elapsed;
+        string regionEdgesDurationMsg = "Time to regionEdgesDuration: " + regionEdgesDuration.ToString(@"m\:ss\.fff");
+        Debug.Log(regionEdgesDurationMsg);
+
+        /*****************************
+         * Scaled SubRegion Detection
+         *****************************/
+
+        //timer.Restart();
+        //timer.Start();
+        //SubregionGenerator subregionGen = new SubregionGenerator();
+        //Texture2D scaledSubRegionsOfLargestRegion = subregionGen.GetSubRegionsFromRegion(
+        //    scaledSilhouetteRegionNNTex, 
+        //    scaledHeightMapNNTex, 
+        //    regionGen.GenerateSitesForRegion(regions[largestRegionIndex], 200, scaling)
+        //);
+
+        //timer.Stop();
+        //System.TimeSpan scaledSubRegionsDuration = timer.Elapsed;
+        //string scaledSubRegionsDurationMsg = "Time to GetSubRegionsFromRegion: " + scaledSubRegionsDuration.ToString(@"m\:ss\.fff");
+        //Debug.Log(scaledSubRegionsDurationMsg);
+
+        //SaveMapAsPNG("scaledSubRegionsOfLargestRegion", scaledSubRegionsOfLargestRegion);
+
+        ResetRtx(scaledHeightMapNNRT);
+        ResetRtx(scaledSilhouetteRegionNN);
+        ResetRtx(largestRegionSilhouette);
+
+        //timer.Restart();
+        //timer.Start();
+        //RenderTexture InitedMaskTexture = regionGen.GenerateTestRegion
+        //(
+        //    regions[largestRegionIndex], 
+        //    250,
+        //    worldSettings._worldWidth,
+        //    worldSettings._worldHeight
+        //);
+        //timer.Stop();
+        //System.TimeSpan duration = timer.Elapsed;
+        //string timeElapsedMsg = "Time taken to execute GenerateTestRegion: " + duration.ToString(@"m\:ss\.fff");
+        //Debug.Log(timeElapsedMsg);
+
+        //RegionDebug.DebugRegionSites
+        //(
+        //    regionGen.debugRegionInfo,
+        //    TextureGenerator.CreateTexture2D(InitedMaskTexture)
+        //);
+
+        //SaveMapAsPNG("InitMaskRegion_Largest", InitedMaskTexture);
+
+        //ResetRtx(InitedMaskTexture);
     }
 
     public void GenerateWorld()
@@ -197,23 +359,26 @@ public class WorldGenerator : MonoBehaviour
         return silhouette;
     }
 
+    async void SaveMapAsPNG(string InFileName, Texture2D InTex)
+    {
+        if (InTex != null)
+        {
+            // attempting C# aync functionality
+            await TextureGenerator.SaveTextureAsPng(
+                InTex,
+                AppPath,
+                InFileName + ".png"
+            );
+        }
+    }
+
     async void SaveMapAsPNG(string InFileName, RenderTexture InTex)
     {
         if (InTex != null)
         {
-            //StartCoroutine(TextureGenerator.AsyncSaveTextureAsPNG(
-            //    TextureGenerator.CreateTexture2D(InTex, worldSettings._worldWidth, worldSettings._worldHeight),
-            //    InFileName
-            //));
-
-            //TextureGenerator.ThreadedSaveTextureAsPNG(
-            //    TextureGenerator.CreateTexture2D(InTex, worldSettings._worldWidth, worldSettings._worldHeight),
-            //    InFileName
-            //);
-
             // attempting C# aync functionality
             await TextureGenerator.SaveTextureAsPng(
-                TextureGenerator.CreateTexture2D(InTex, worldSettings._worldWidth, worldSettings._worldHeight),
+                TextureGenerator.CreateTexture2D(InTex),
                 AppPath,
                 InFileName + ".png"
             );

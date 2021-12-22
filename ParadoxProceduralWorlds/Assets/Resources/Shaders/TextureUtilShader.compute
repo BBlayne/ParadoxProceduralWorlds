@@ -2,14 +2,41 @@
 
 uniform uint2 reses;
 
-//uniform float4 colours[MAX_COLOURS];
-
 uniform StructuredBuffer<float4> colours;
 uniform StructuredBuffer<int> LabelGrid;
 
 RWTexture2D<float4> Result;
 
 
+struct Coord {
+    int x;
+    int y;
+};
+
+bool IsInsideTriangle(Coord InPoint, Coord InVertexA, Coord InVertexB, Coord InVertexC)
+{
+    float det = (InVertexB.x - InVertexA.x) * (InVertexC.y - InVertexA.y) - (InVertexB.y - InVertexA.y) * (InVertexC.x - InVertexA.x);
+
+    return  det * ((InVertexB.x - InVertexA.x) * (InPoint.y - InVertexA.y) - (InVertexB.y - InVertexA.y) * (InPoint.x - InVertexA.x)) >= 0 &&
+        det * ((InVertexC.x - InVertexB.x) * (InPoint.y - InVertexB.y) - (InVertexC.y - InVertexB.y) * (InPoint.x - InVertexB.x)) >= 0 &&
+        det * ((InVertexA.x - InVertexC.x) * (InPoint.y - InVertexC.y) - (InVertexA.y - InVertexC.y) * (InPoint.x - InVertexC.x)) >= 0;
+}
+
+bool IsPixelInsidePolygon(Coord InPolygon[25], uint numVertices, Coord InSite, Coord InPoint)
+{
+    for (uint i = 0; i < numVertices; ++i)
+    {
+        Coord current = InPolygon[i];
+        Coord next = InPolygon[(i + 1) % numVertices];
+
+        if (IsInsideTriangle(InPoint, current, next, InSite))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 
 [numthreads(16, 16, 1)]
@@ -62,3 +89,156 @@ void ColourLandTexture(uint3 id : SV_DispatchThreadID)
 
     Result[id.xy] = float4(pixelColour.x, pixelColour.y, pixelColour.z, 1);
 }
+
+uniform uint coordsSize;
+
+uniform StructuredBuffer<uint2> coords;
+
+#pragma kernel ColourVoronoiRegion
+
+struct Face {
+    Coord Site;
+    int numVertices;
+};
+
+uniform StructuredBuffer<Face> faces;
+uniform StructuredBuffer<Coord> faceVertices;
+
+uniform int numFaces;
+
+uniform uint2 bounds;
+uniform uint2 boundsOrigin;
+
+uniform Texture2D<float4> Mask;
+
+[numthreads(16, 16, 1)]
+void ColourVoronoiRegion(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > bounds.x || id.y > bounds.y)
+    {
+        return;
+    }
+
+    uint idX = id.x + boundsOrigin.x;
+    uint idY = id.y + boundsOrigin.y;
+
+    if (Mask[id.xy].r == 0)
+    {
+        return;
+    }
+
+    float4 outColour = float4(0, 0, 0, 1);    
+
+    // I imagine this could be parallelized
+    for (int i = 0; i < numFaces; ++i)
+    {
+        Coord pixel;
+        pixel.x = idX;
+        pixel.y = idY;
+
+        Coord faceVertices[25];
+
+        for (int j = 0; i < faces[i].numVertices; ++j)
+        {
+            faceVertices[j] = faceVertices[i * 25 + j];
+        }
+
+        if (IsPixelInsidePolygon(faceVertices, faces[i].numVertices, faces[i].Site, pixel))
+        {
+            outColour = colours[i];
+            break;
+        }
+    }
+
+    Result[id.xy] = outColour;
+}
+
+#pragma kernel FindRegionBoundaries
+
+struct Bound {
+    int minX;
+    int maxX;
+    int minY;
+    int maxY;
+};
+
+uniform uint boundedRegionCoordSize;
+
+uniform StructuredBuffer<uint2> boundedRegionCoords;
+
+RWStructuredBuffer<Bound> regionBounds;
+
+[numthreads(16, 16, 1)]
+void FindRegionBoundaries(uint3 id : SV_DispatchThreadID)
+{
+    if ((id.y * reses.x + id.x) >= boundedRegionCoordSize)
+    {
+        return;
+    }
+
+    uint dX = (uint)boundedRegionCoords[id.y * reses.x + id.x].x;
+    uint dY = (uint)boundedRegionCoords[id.y * reses.x + id.x].y;
+
+    uint2 pix;
+    pix.x = dX;
+    pix.y = dY;
+
+    InterlockedMin((uint)regionBounds[0].minX, pix.x);
+    InterlockedMax((uint)regionBounds[0].maxX, pix.x);
+    InterlockedMin((uint)regionBounds[0].minY, pix.y);
+    InterlockedMax((uint)regionBounds[0].maxY, pix.y);
+}
+
+#pragma kernel FillRegionSilhouette
+
+uniform uint2 silhouetteReses;
+uniform float4 silhouetteColour;
+uniform uint silhouetteRegionCoordSize;
+uniform StructuredBuffer<uint2> silhouetteRegionCoords;
+
+RWTexture2D<float4> silhouetteTex;
+
+[numthreads(16, 16, 1)]
+void FillRegionSilhouette(uint3 id : SV_DispatchThreadID)
+{
+    if ((id.y * silhouetteReses.x + id.x) >= silhouetteRegionCoordSize)
+    {
+        return;
+    }
+
+    uint dX = (uint)silhouetteRegionCoords[id.y * silhouetteReses.x + id.x].x;
+    uint dY = (uint)silhouetteRegionCoords[id.y * silhouetteReses.x + id.x].y;
+
+    uint2 pix;
+    pix.x = dX;
+    pix.y = dY;
+
+    silhouetteTex[pix.xy] = silhouetteColour;
+}
+
+#pragma kernel ScaleImageNN
+
+uniform uint2 srcImageReses;
+uniform uint2 dstImageReses;
+
+uniform Texture2D<float4> unscaledTex;
+
+RWTexture2D<float4> scaledTex;
+
+[numthreads(16, 16, 1)]
+void ScaleImageNN(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > dstImageReses.x || id.y > dstImageReses.y)
+    {
+        return;
+    }
+
+    float ratioX = ((float)srcImageReses.x) / dstImageReses.x;
+    float ratioY = ((float)srcImageReses.y) / dstImageReses.y;
+
+    uint dx = floor(((float)id.x + 0.5) * ratioX);
+    uint dy = floor(((float)id.y + 0.5) * ratioY);
+
+    scaledTex[id.xy] = unscaledTex[uint2(dx, dy).xy];    
+}
+
