@@ -118,9 +118,20 @@ namespace TriangleNet.Smoothing
         private void Centroid(Face face, out double x, out double y)
         {
             double ai, atmp = 0, xtmp = 0, ytmp = 0;
+            TriangleNet.Topology.DCEL.HalfEdge edge = null;
+            var first = 0;
+            if (face != null && face.edge != null && face.edge.Next != null)
+            {
+                edge = face.Edge;
+                first = edge.Next.ID;
+            }
+            else
+            {
+                x = face.generator.x;
+                y = face.generator.y;
 
-            var edge = face.Edge;
-            var first = edge.Next.ID;
+                return;
+            }
 
             Point p, q;
 

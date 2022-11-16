@@ -29,17 +29,48 @@ namespace Jobberwocky.GeometryAlgorithms.Source.Algorithms.Voronoi2D
             if (parameters == null) {
                 parameters = new Voronoi2DParameters();
             }
+            
+            // Setting up objects for triangulation
+                ConstraintOptions cOptions = new ConstraintOptions();
 
-            var points = parameters.Points;
-            if (points != null && points.Length > 2) {
-                var inputVertices = VectorToVertex(points, parameters.CoordinateSystem);
+                // Assume as default value that the shape is convex
+                cOptions.Convex = true;
+                cOptions.ConformingDelaunay = true;
 
-                var polygon = new Polygon();
-                for (var i = 0; i < inputVertices.Length; i++) {
-                    polygon.Add(inputVertices[i]);
+                // We use a polygon for the triangulation of the 2D data 
+                Polygon polygon = new Polygon();
+
+                // Check whether the regular points are not null 
+                // else add these points to the polygon
+                var points = parameters.Points;
+                if (points != null) {
+                    TriangleNet.Geometry.Vertex[] pointVertices = VectorToVertex(points, parameters.CoordinateSystem);
+
+                    for (var i = 0; i < pointVertices.Length; i++) {
+                        polygon.Add(pointVertices[i]);
+                    }
                 }
 
-                ConstraintOptions cOptions = new ConstraintOptions() {ConformingDelaunay = true};
+                var boundary = parameters.Boundary;
+                if (boundary != null) {
+                    TriangleNet.Geometry.Vertex[] boundVertices = VectorToVertex(boundary, parameters.CoordinateSystem);
+
+                    polygon.Add(new Contour(boundVertices), false);
+
+                    // Assume that the shape is not convex anymore when we use boundary points
+                    cOptions.Convex = false;
+                }
+
+                var holes = parameters.Holes;
+                if (holes != null) {
+                    for (var i = 0; i < holes.Length; i++) {
+                        TriangleNet.Geometry.Vertex[] holeVertices = VectorToVertex(holes[i], parameters.CoordinateSystem);
+
+                        polygon.Add(new Contour(holeVertices), true);
+                    }
+                }
+
+                // Create triangulation
 
                 var triangulationMesh = (TriangleNet.Mesh) polygon.Triangulate(cOptions);
 
@@ -105,7 +136,7 @@ namespace Jobberwocky.GeometryAlgorithms.Source.Algorithms.Voronoi2D
                 geometry.Indices = indices;
                 geometry.Cells = cells;
                 geometry.Topology = MeshTopology.Lines;
-            }
+            
 
             return geometry;
         }

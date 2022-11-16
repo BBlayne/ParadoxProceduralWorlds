@@ -37,6 +37,12 @@ public static class TextureGenerator
         public int Size;
     }
 
+    private struct Edge
+    {
+        public Vector2 StartPoint;
+        public Vector2 EndPoint;
+    }
+
     private struct RegionBound
     {
         public int minX;
@@ -191,6 +197,142 @@ public static class TextureGenerator
         shader.Dispatch(kernel, Mathf.CeilToInt(inGridWidth / 16f), Mathf.CeilToInt(inGridHeight / 16f), 1);
 
         coordBuffer.Release();
+
+        return outRTex;
+    }
+
+    public static RenderTexture BlitDelaunayMapToRT(UnityEngine.Mesh InMesh, Vector2Int InMapSizes, Material InMat)
+    {
+        RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
+
+        Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
+        {
+            GL.Clear(true, true, Color.black);
+            GL.wireframe = true;
+
+            Nothke.Utils.RTUtils.DrawMesh(outRTex, InMesh, InMat, Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one));
+        }
+        Nothke.Utils.RTUtils.EndRendering(outRTex);
+
+        GL.wireframe = false;
+
+        return outRTex;
+    }
+
+    public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe)
+    {
+        RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
+
+        Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
+        {
+            GL.Clear(true, true, Color.black);
+            if (InWireframe)
+            {
+                GL.wireframe = true;
+            }            
+
+            Nothke.Utils.RTUtils.DrawMesh(outRTex, InMesh, InMat, Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one));
+        }
+        Nothke.Utils.RTUtils.EndRendering(outRTex);
+
+        GL.wireframe = false;
+
+        return outRTex;
+    }
+
+    public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat)
+    {
+        RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
+
+        Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
+        {
+            GL.Clear(true, true, Color.black);
+            GL.wireframe = true;
+
+            Nothke.Utils.RTUtils.DrawMesh(outRTex, InMesh, InMat, Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one));
+        }
+        Nothke.Utils.RTUtils.EndRendering(outRTex);
+
+        GL.wireframe = false;
+
+        return outRTex;
+    }
+
+    public static RenderTexture DrawDalaunayMap(UnityEngine.Mesh InMesh, int InMapWidth, int InMapHeight)
+    {
+        // final result render texture
+        RenderTexture outRTex = new RenderTexture(InMapWidth, InMapHeight, 0);
+
+        if (InMesh.vertexCount <= 3)
+        {
+            return outRTex;
+        }
+
+        // Derive list of edges
+        List<Edge> Edges = new List<Edge>();
+        int[] MeshIndices = InMesh.GetIndices(0);
+
+        Vector3[] triangleVertices = new Vector3[3];
+        for (int i = 0; i < MeshIndices.Length; i += 3)
+        {
+            for (var j = 0; j < 3; j++)
+            {
+                triangleVertices[j] = InMesh.vertices[MeshIndices[i + j]];
+            }
+
+            for (int k = 0; k < triangleVertices.Length; k++)
+            {
+                var startVertex = triangleVertices[k];
+                var endVertex = triangleVertices[(k + 1) % triangleVertices.Length];
+
+                Edge edge;
+                edge.StartPoint = new Vector2(Mathf.Round(startVertex.x), Mathf.Round(startVertex.y));
+                edge.EndPoint = new Vector2(Mathf.Round(endVertex.x), Mathf.Round(endVertex.y));
+
+                Edges.Add(edge);
+            }
+        }
+
+        outRTex.enableRandomWrite = true;
+        outRTex.Create();
+
+        ComputeShader shader = Resources.Load(shaderPath) as ComputeShader;
+        if (shader == null)
+        {
+            Debug.LogError(noShaderMsg);
+            return null;
+        }
+
+        int[] resInts = { InMapWidth, InMapHeight };
+        int[] Sizes = { InMesh.vertexCount, Edges.Count };
+        Debug.Log("Edges: " + Edges.Count);
+
+        int kernel = shader.FindKernel("DrawDelaunayTexture");
+
+        shader.SetInts("Dims", resInts);
+        shader.SetInts("Sizes", Sizes);
+        shader.SetTexture(kernel, "DelaunayTexOutput", outRTex);
+
+        // Passing in our array of coordinates comprising the vertices of our delaunay triangulation
+        // a Coord is 2 ints (4 bytes each)
+        int Stride = System.Runtime.InteropServices.Marshal.SizeOf(typeof(Vector3)); // should be 12
+        Debug.Log("Vertex (Vector3) Stride: " + Stride);
+        ComputeBuffer PointsBuffer = new ComputeBuffer(InMesh.vertexCount, Stride);
+        PointsBuffer.SetData(InMesh.vertices);
+        shader.SetBuffer(kernel, "Points", PointsBuffer);
+
+        // Need to pass in array of edges, an edge is two points, which is:
+        // 2 ints (4 bytes each) * two, should be 16
+        int EdgeStride = System.Runtime.InteropServices.Marshal.SizeOf(typeof(Edge)); // should be 16
+        Debug.Log("Edge Stride: " + EdgeStride);
+        ComputeBuffer EdgesBuffer = new ComputeBuffer(Edges.Count, EdgeStride);
+        EdgesBuffer.SetData(Edges.ToArray());
+        shader.SetBuffer(kernel, "Edges", EdgesBuffer);
+
+        shader.Dispatch(kernel, Mathf.CeilToInt(InMapWidth / 16f), Mathf.CeilToInt(InMapHeight / 16f), 1);
+
+        PointsBuffer.Release();
+        EdgesBuffer.Release();
 
         return outRTex;
     }
@@ -630,5 +772,146 @@ public static class TextureGenerator
         byte[] bytes = texture.EncodeToPNG();
         File.WriteAllBytes(Application.dataPath + "/Temp/" + name + ".png", bytes);
         Debug.Log(bytes.Length / 1024 + "Kb was saved as: " + Application.dataPath + "/Temp/" + name + ".png");
+    }
+
+    public static List<Color> GenerateHSVColours(int InTotalPoints, Vector2Int InHue, Vector2Int InSat, Vector2Int InVal, int InHueOffset = 30)
+    {
+        List<Color> colors = new List<Color>();
+
+        (int, int) HueRange = (InHue.x, InHue.y);
+        (int, int) SatRange = (InSat.x, InSat.y);
+        (int, int) ValRange = (InVal.x, InVal.y); // brightness
+
+        // I recommend introducing some randomness in the generation so you don't end up with a TOO obviously generated result
+        float HueJitter = 0.05f;
+        float SatJitter = 0.05f;
+        float ValJitter = 0.05f;
+
+        int SatCount = 10; // Number of saturation bands to generate.  Must be greater than 1 to avoid a div/0 error.
+        int ValCount = 10; // Number of value bands to generate.  Must be greater than 1 to avoid a div/0 error.
+
+        // (With Hue = 10) This will generate 1000 colors (10*10*10).  To set (approximate) number of colors directly, use cubic root of n for each.
+        //int hueCount = 10; // Number of hues to generate. Must be greater than 1 to avoid a div/0 error.
+
+        // making hueCount closer to the number of sites
+        // will be slightly more if there is a remainder.
+        int HueCount = Mathf.CeilToInt((float)InTotalPoints / (ValCount * SatCount));
+
+        if (HueCount < 10) HueCount = 10;
+
+        for (int i = 0; i < HueCount; i++)
+        {
+            for (int j = 0; j < SatCount; j++)
+            {
+                for (int k = 0; k < ValCount; k++)
+                {
+                    var Hue = Mathf.Lerp(HueRange.Item1, HueRange.Item2, ((float)i / (HueCount - 1)) + UnityEngine.Random.Range(-HueJitter, HueJitter));
+                    var Sat = Mathf.Lerp(SatRange.Item1, SatRange.Item2, ((float)j / (SatCount - 1)) + UnityEngine.Random.Range(-SatJitter, SatJitter));
+                    // This gives a fully linear distribution, however people don't see brightness linearly.  
+                    // Recommend using gamma scaling instead.  This is left as an exercise to the reader :)
+                    var Val =
+                        Mathf.Lerp(ValRange.Item1,
+                                   ValRange.Item2,
+                                   ((float)k / (ValCount - 1)) + UnityEngine.Random.Range(-ValJitter, ValJitter));
+
+                    int HueRounded = Mathf.FloorToInt(Hue);
+                    float HueRounder = Val % 1;
+                    Hue = MapUtils.Mod(HueRounded + InHueOffset, 360) + HueRounder;
+                    colors.Add(Color.HSVToRGB(Hue / 360, Sat / 100, Val / 100));
+                }
+            }
+        }
+
+        List<Color> temp = new List<Color>();
+        float amt = (float)colors.Count / InTotalPoints;
+        for (int i = 0; i < InTotalPoints; i++)
+        {
+            int index = Mathf.RoundToInt(i * amt);
+            temp.Add(colors[index]);
+        }
+
+        return temp;
+    }
+
+    public static Texture2D GenerateBiColourElevationTextureMap(int InNumCells, ProceduralWorlds.MapCell[] InMapCells)
+    {
+        int NumGradients = 100;
+
+        Texture2D OutTex = new Texture2D(InNumCells, 1, TextureFormat.RGBA32, false);
+
+        Vector2Int LandHues = new Vector2Int(30, 330);
+        Vector2Int LandSaturation = new Vector2Int(0, 10);
+        Vector2Int LandBrightness = new Vector2Int(40, 100);
+
+        List<Color> LandElevationColours = GenerateHSVColours(NumGradients, LandHues, LandSaturation, LandBrightness, 0);
+
+        Vector2Int WaterHues = new Vector2Int(160, 250);
+        Vector2Int WaterSaturation = new Vector2Int(50, 100);
+        Vector2Int WaterBrightness = new Vector2Int(50, 100);
+        List<Color> WaterElevationColours = GenerateHSVColours(NumGradients, WaterHues, WaterSaturation, WaterBrightness, 0);
+        List<Color> CellColours = new List<Color>();
+        for (int i = 0; i < InNumCells; i++)
+        {
+            if (InMapCells[i].RegionType == ERegionType.Land)
+            {
+                CellColours.Add(LandElevationColours[Mathf.RoundToInt(InMapCells[i].Elevation * NumGradients)]);
+            }
+            else
+            {
+                CellColours.Add(WaterElevationColours[Mathf.RoundToInt(InMapCells[i].Elevation * NumGradients)]);
+            }
+        }
+
+        OutTex.SetPixels(CellColours.ToArray());
+        OutTex.Apply();
+
+        return OutTex;
+    }
+
+    // Below is probably faster to do on the GPU?
+    public static Texture2D GenerateRandomColourTexture(int InNumColours)
+    {
+        Texture2D OutTex = new Texture2D(InNumColours, 1, TextureFormat.RGBA32, false);
+
+        Vector2Int Hues = new Vector2Int(30, 330);
+        Vector2Int Saturation = new Vector2Int(80, 100);
+        Vector2Int Brightness = new Vector2Int(70, 100);
+
+        List<Color> Colours = GenerateHSVColours(InNumColours, Hues, Saturation, Brightness, 0);
+        OutTex.SetPixels(Colours.ToArray());
+        OutTex.Apply();
+
+        return OutTex;
+    }
+
+    async public static void SaveMapAsPNG(string InFileName, Texture2D InTex)
+    {
+        if (InTex != null)
+        {
+            // attempting C# aync functionality
+            await TextureGenerator.SaveTextureAsPng(
+                InTex,
+                AppPath,
+                InFileName + ".png"
+            );
+        }
+    }
+
+    async public static void SaveMapAsPNG(string InFileName, RenderTexture InTex)
+    {
+        if (InTex != null)
+        {
+            // attempting C# aync functionality
+            await TextureGenerator.SaveTextureAsPng(
+                TextureGenerator.CreateTexture2D(InTex),
+                AppPath,
+                InFileName + ".png"
+            );
+        }
+    }
+
+    public static Material GetUnlitTextureMaterial()
+    {
+        return Resources.Load("Materials/UnlitTextureMapMaterial", typeof(Material)) as Material;
     }
 }

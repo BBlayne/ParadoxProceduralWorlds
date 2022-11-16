@@ -436,7 +436,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 1024, y: 512}
+  m_SizeDelta: {x: 1024, y: 1024}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &641571936
 MonoBehaviour:
@@ -532,8 +532,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   worldSettings:
-    _worldHeight: 4096
-    _worldWidth: 8192
+    _worldHeight: 1024
+    _worldWidth: 1024
     _worldNoiseSettings:
       Seed: 0
       Octaves: 5
@@ -545,6 +545,11 @@ MonoBehaviour:
       AFalloffFactor: 3
       BFalloffFactor: 2.2
   mapDisplay: {fileID: 825779250}
+  WireframeMaterial: {fileID: 2100000, guid: aa974dea2827b2a48a184876c9c3629b, type: 2}
+  UnlitMaterial: {fileID: 2100000, guid: e96605b1a28407440ac159040c769b0b, type: 2}
+  UnlitTextureMaterial: {fileID: 2100000, guid: 17f685d74597c024f8e248ddacc88df5, type: 2}
+  VoronoiTexture: {fileID: 2800000, guid: 1ec5955721cab59459700958a9ee7c2d, type: 3}
+  TargetNumberOfCells: 1000
 --- !u!114 &825779250
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -608,7 +613,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
-  m_ScaleFactor: 1
+  m_ScaleFactor: 0.8
   m_ReferenceResolution: {x: 800, y: 600}
   m_ScreenMatchMode: 0
   m_MatchWidthOrHeight: 0

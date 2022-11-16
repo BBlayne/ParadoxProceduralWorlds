@@ -40,6 +40,7 @@ namespace Jobberwocky.GeometryAlgorithms.Examples
         private List<Dropdown.OptionData> optionsAlgorithms = new List<Dropdown.OptionData> {
             new Dropdown.OptionData("Triangulation"),
             new Dropdown.OptionData("Hull"),
+            new Dropdown.OptionData("Voronoi"),
         };
 
         // Available data
@@ -155,6 +156,36 @@ namespace Jobberwocky.GeometryAlgorithms.Examples
 
             Camera.main.backgroundColor = new Color(55f / 255f, 189f / 255f, 175 / 255f);
         }
+        
+        /// <summary>
+        /// Creates the triangulation for a certain shape
+        /// </summary>
+        /// <param name="shape"></param>
+        private void CreateVoronoi(Shape shape)
+        {
+            var parameters = new Voronoi2DParameters();
+            parameters.Points = shape.Points;
+            parameters.Boundary = shape.Boundary;
+            parameters.Holes = shape.Holes;
+
+            var mesh = new VoronoiAPI().Voronoi2D(parameters);
+            Triangles.GetComponent<MeshFilter>().mesh = mesh;
+
+            var scaleWireframe = Mathf.Abs(shape.CameraPoint.z / 350f);
+            var scaleBoundary = Mathf.Abs(shape.CameraPoint.z / 250f);
+
+            var vertices = mesh.vertices;
+            var indices = mesh.GetIndices(0);
+            for (var i = 0; i < indices.Length; i += 2) {
+                var lineVertices = new Vector3[2];
+                lineVertices[0] = vertices[indices[i]];
+                lineVertices[1] = vertices[indices[i+1]];
+                
+                CreateLineCylinders(lineVertices, scaleWireframe, cylinderMesh,  wireframeMaterial, Lines);
+            }
+            
+            Camera.main.backgroundColor = new Color(238f / 255f, 89f / 255f, 108f / 255f);
+        }
 
         /// <summary>
         /// Given the dataName and algorithmName the geometry is updated with the corresponding shape and method
@@ -186,6 +217,7 @@ namespace Jobberwocky.GeometryAlgorithms.Examples
                     CreateHull(shape);
                     break;
                 case "Voronoi":
+                    CreateVoronoi(shape);
                     break;
             }
 

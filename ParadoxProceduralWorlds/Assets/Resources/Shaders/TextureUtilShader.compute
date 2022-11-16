@@ -38,6 +38,76 @@ bool IsPixelInsidePolygon(Coord InPolygon[25], uint numVertices, Coord InSite, C
     return false;
 }
 
+bool IsPointInsideOrOnCircle(uint2 InPoint, float3 InCenter, uint InRadius)
+{
+    uint EcksSquared = (InPoint.x - InCenter.x) * (InPoint.x - InCenter.x);
+    uint WhySquared = (InPoint.y - InCenter.y) * (InPoint.y - InCenter.y);
+
+    return ((EcksSquared + WhySquared) <= (InRadius * InRadius));
+}
+
+bool IsCollinear(float2 a, float2 b, float2 c)
+{
+    return (((b.x - a.x) * (c.y - a.y)) == ((c.x - a.x) * (b.y - a.y)));
+}
+
+bool IsWithin(float p, float q, float r)
+{
+    if ((q >= p && q <= r) || (q >= r && q <= p))
+    {
+        return true;
+    }
+    return false;
+}
+
+bool IsPixelOnLine(float2 A, float2 B, int2 C)
+{
+    const float tolerance = 0.5f;
+
+    float minX = min(A.x, B.x) - tolerance;
+    float maxX = max(A.x, B.x) + tolerance;
+    float minY = min(A.y, B.y) - tolerance;
+    float maxY = max(A.y, B.y) + tolerance;
+
+    //Check C is within the bounds of the line
+    if (C.x >= maxX || C.x <= minX || C.y <= minY || C.y >= maxY)
+    {
+        return false;
+    }
+
+    // Check for when AB is vertical
+    if (A.x == B.x)
+    {
+        if (abs(A.x - C.x) >= tolerance)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    // Check for when AB is horizontal
+    if (A.y == B.y)
+    {
+        if (abs(A.y - C.y) >= tolerance)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    // Check istance of the point form the line
+    float distFromLine = abs(((B.x - A.x) * (A.y - C.y)) - ((A.x - C.x) * (B.y - A.y))) / sqrt((B.x - A.x) * (B.x - A.x) + (B.y - A.y) * (B.y - A.y));
+
+    if (distFromLine >= tolerance)
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
 
 [numthreads(16, 16, 1)]
 void ColourTexture(uint3 id : SV_DispatchThreadID)
@@ -242,3 +312,54 @@ void ScaleImageNN(uint3 id : SV_DispatchThreadID)
     scaledTex[id.xy] = unscaledTex[uint2(dx, dy).xy];    
 }
 
+#pragma kernel DrawDelaunayTexture
+
+uniform uint2 Dims;
+uniform uint2 Sizes;
+
+RWTexture2D<float4> DelaunayTexOutput;
+
+struct Edge {
+    float2 startPoint;
+    float2 endPoint;
+};
+
+uniform StructuredBuffer<float3> Points;
+uniform StructuredBuffer<Edge> Edges;
+
+[numthreads(16, 16, 1)]
+void DrawDelaunayTexture(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > Dims.x || id.y > Dims.y)
+    {
+        return;
+    }
+
+    float4 pxColour = float4(0, 0, 0, 1); // black by default
+
+    for (uint di = 0; di < Sizes.y; di++)
+    {
+        float2 PointA = Edges[di].startPoint;
+        float2 PointB = Edges[di].endPoint;
+        //uint2 Point = uint2(id.x, id.y);
+        int2 Point = id.xy;
+        if (IsPixelOnLine(PointA, PointB, Point))
+        {
+            pxColour = float4(1, 1, 1, 1);
+            break;
+        }
+    }
+
+    uint2 px = id.xy;
+    // paint the sites 
+    for (uint j = 0; j < Sizes.x; j++)
+    {        
+        if (IsPointInsideOrOnCircle(px, Points[j], 1))
+        {
+            pxColour = float4(1, 0, 0, 1);
+            break;
+        }
+    }
+
+    DelaunayTexOutput[id.xy] = pxColour;
+}
