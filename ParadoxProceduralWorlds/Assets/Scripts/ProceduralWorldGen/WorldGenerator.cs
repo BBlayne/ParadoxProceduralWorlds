@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMesh = TriangleNet.Mesh;
+using TriangleNet.Voronoi;
 
 public class WorldGenerator : MonoBehaviour
 {
@@ -125,14 +126,57 @@ public class WorldGenerator : MonoBehaviour
     {
         ResetRtx(PolyMapRT);
 
-        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", TargetNumberOfCells);
+        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", 10);
         PolyMapGen.SetDistributionMode(ProceduralWorlds.ESiteDistribution.RANDOM);
         Vector2Int WorldSizes = new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight);
         PolyMapGen.MapDimensions = WorldSizes;
         Mesh WorldMapMesh = PolyMapGen.GeneratePolygonalMapMesh();
+
+        int NumTectonicPlates = 2;
+        int[] VoronoiTectonicCells = GenerateTectonicPlates(PolyMapGen.MapDimensions, NumTectonicPlates, 25, PolyMapGen.Vor, false);
+        Vector2Int Hues = new Vector2Int(30, 330);
+        Vector2Int Saturation = new Vector2Int(99, 100);
+        Vector2Int Brightness = new Vector2Int(99, 100);
+        List<Color> PlateColours = TextureGenerator.GenerateHSVColours(NumTectonicPlates + 1, Hues, Saturation, Brightness);
+
         PolyMapRT = PolyMapGen.MainRTex;
 
+        ResetRtx(PolyMapRT);
+
+        Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(PolyMapGen.Vor.Faces.Count, VoronoiTectonicCells, PlateColours);
+        PolyMapRT = PolyMapGen.RenderPolygonalMap(WorldMapMesh, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());
+
         UpdateMapDisplay(PolyMapRT);
+    }
+
+    private List<Vector3> PickPoissonRandomPoints(Vector2Int InWorldSizes, int InNumPoints, int InPadding, int InRadius)
+    {
+        List<Vector3>  OutPoints = MapUtils.GetPoissonDistributedPoints2D
+        (
+            InWorldSizes, InRadius, 30, InPadding, new List<Vector3>(), InNumPoints
+        );
+
+        return OutPoints;
+    }
+
+    private int[] GenerateTectonicPlates(Vector2Int InWorldSizes, int InNumPlates, int InPadding, BoundedVoronoi InMapCells, bool bIsRandom)
+    {
+        List<Vector3> PlatePointCenters = PickPoissonRandomPoints(InWorldSizes, InNumPlates, InPadding, 256);
+
+        List<int> PlateCentersFaceIndices = PolyMapGen.GetCellIDsFromCoordinates(InMapCells, PlatePointCenters);
+
+        /* Random Flood Fill Algorithm */
+        return PolyMapGen.TectonicPlatesFloodFill2D(InMapCells, PlateCentersFaceIndices, bIsRandom);
+    }
+
+    private void GenerateContinents(Vector2Int InWorldSizes, int InNumContinents, int InPadding)
+    {
+        List<Vector3> ContinentPoints = PickPoissonRandomPoints(InWorldSizes, InNumContinents, InPadding, 128);
+
+        for (int i = 0; i < ContinentPoints.Count; i++)
+        {
+
+        }
     }
 
     private void UpdateMapDisplay(RenderTexture InMapRtx)

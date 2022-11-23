@@ -5,10 +5,11 @@ using TriangleNet.Geometry;
 using TVertex = TriangleNet.Geometry.Vertex;
 using System.Linq;
 using DataStructures.ViliWonka.KDTree;
-using RTree;
+using VQuery = DataStructures.ViliWonka.KDTree.KDQuery;
 using TriangleNet.Voronoi;
 using TMesh = TriangleNet.Mesh;
 using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
+using TFace = TriangleNet.Topology.DCEL.Face;
 using TQualityOptions = TriangleNet.Meshing.QualityOptions;
 
 // Design Notes
@@ -26,6 +27,13 @@ namespace ProceduralWorlds
         RANDOM
     }
 
+    public enum ECellColour
+    {
+        RANDOM,
+        NGRADIANT, // Per N-Types, different colour gradiant
+        BLACK_AND_WHITE
+    }
+
     public struct MapCell
     {
         public int CellID;
@@ -38,6 +46,7 @@ namespace ProceduralWorlds
         public MapCell[] MapCells;
 
         ESiteDistribution SiteDistributionMode = ESiteDistribution.RANDOM;
+        ECellColour CellColour = ECellColour.RANDOM;
 
         public Vector3[] InitialSites = null;
 
@@ -49,11 +58,17 @@ namespace ProceduralWorlds
 
         public RenderTexture MainRTex = null;
 
+        public BoundedVoronoi Vor = null;
+        public TMesh Triang = null;
+
+        private Mesh CombinedVoronoiMesh = null;
+
         public PolygonalMapGenerator(int InNumCells)
         {
             Random.InitState(Time.time.ToString().GetHashCode());
             NumberOfTargetCells = InNumCells;
             SiteDistributionMode = ESiteDistribution.RANDOM;
+            CellColour = ECellColour.RANDOM;
         }
 
         public PolygonalMapGenerator(int InSeed, int InNumCells)
@@ -61,6 +76,7 @@ namespace ProceduralWorlds
             Random.InitState(InSeed);
             NumberOfTargetCells = InNumCells;
             SiteDistributionMode = ESiteDistribution.RANDOM;
+            CellColour = ECellColour.RANDOM;
         }
 
         public PolygonalMapGenerator(string InSeedString, int InNumCells)
@@ -68,11 +84,17 @@ namespace ProceduralWorlds
             Random.InitState(InSeedString.GetHashCode());
             NumberOfTargetCells = InNumCells;
             SiteDistributionMode = ESiteDistribution.RANDOM;
+            CellColour = ECellColour.RANDOM;
         }
 
         public void SetDistributionMode(ESiteDistribution InDistribution)
         {
             SiteDistributionMode = InDistribution;
+        }
+
+        public void SetColourMode(ECellColour InColourMode)
+        {
+            CellColour = InColourMode;
         }
 
         public void SetSites(Vector3[] InSites)
@@ -86,7 +108,7 @@ namespace ProceduralWorlds
             {
             case ESiteDistribution.RANDOM:
             default:
-                InitialSites = GenerateRandomPoints(NumberOfTargetCells, MapDimensions, InPadding).ToArray();
+                InitialSites = MapUtils.GenerateRandomPoints2D(NumberOfTargetCells, MapDimensions, InPadding).ToArray();
                 break;
             }
         }
@@ -95,10 +117,14 @@ namespace ProceduralWorlds
         {
             GenerateSiteDistribution(25);
             TMesh Triangulation = GenerateDelaunayTriangulation(InitialSites, 2);
-            BoundedVoronoi mBoundedVoronoi = GetVoronoiTesselationFromTriangulation(Triangulation);
+            Triang = Triangulation;
+
+            BoundedVoronoi mBoundedVoronoi = GetVoronoiTesselationFromTriangulation(Triang);
             MoveVoronoiVerticesToDelauneyCentroids(mBoundedVoronoi, 2.5f);
-            List<Mesh> VorCellMeshes = TriangulateVoronoiCells(mBoundedVoronoi);            
-            RandomLandDistribution(mBoundedVoronoi.Faces.Count);
+            Vor = mBoundedVoronoi;
+
+            List<Mesh> VorCellMeshes = TriangulateVoronoiCells(Vor);            
+            RandomLandDistribution(Vor.Faces.Count, 0.25f);
             Texture2D VoronoiTexture = TextureGenerator.GenerateBiColourElevationTextureMap(VorCellMeshes.Count, MapCells);
             if (bSaveDebugMaps)
             {
@@ -112,123 +138,12 @@ namespace ProceduralWorlds
                 CombineInstances[i].transform = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one);
             }
 
-            Mesh CombinedVoronoiMesh = new Mesh();
+            CombinedVoronoiMesh = new Mesh();
             CombinedVoronoiMesh.CombineMeshes(CombineInstances);
 
             MainRTex = RenderPolygonalMap(CombinedVoronoiMesh, VoronoiTexture, TextureGenerator.GetUnlitTextureMaterial());
 
             return CombinedVoronoiMesh;
-        }
-
-        private static bool IsValid
-        (
-            Vector3 InCandidate, Vector2 InMapSizes, float InCelLSize, float InRadius, List<Vector3> InPoints, int[,] InGrid, int InPadding
-        )
-        {
-            if (InCandidate.x >= InPadding && InCandidate.x < (InMapSizes.x  - InPadding) && InCandidate.y >= InPadding && InCandidate.y < (InMapSizes.y - InPadding))
-            {
-                int CellX = (int)(InCandidate.x / InCelLSize);
-                int CellY = (int)(InCandidate.y / InCelLSize);
-                int SearchStartX = Mathf.Max(0, CellX - 2);
-                int SearchEndX = Mathf.Min(CellX + 2, InGrid.GetLength(0) - 1);
-                int SearchStartY = Mathf.Max(0, CellY - 2);
-                int SearchEndY = Mathf.Min(CellY + 2, InGrid.GetLength(1) - 1);
-
-                for (int x = SearchStartX; x <= SearchEndX; x++)
-                {
-                    for (int y = SearchStartY; y <= SearchEndY; y++)
-                    {
-                        int PointIndex = InGrid[x, y] - 1;
-                        if (PointIndex != -1)
-                        {
-                            float SqrDist = (InCandidate - InPoints[PointIndex]).sqrMagnitude;
-                            if (SqrDist < InRadius * InRadius)
-                            {
-                                return false;
-                            }
-                        }
-                    }
-                }
-                return true;
-            }
-            return false;
-        }
-
-        public List<Vector3> GenerateRandomPoints(int InNumPoints, Vector2Int InMapSizes, int InPadding)
-        {
-            List<Vector3> Points = new List<Vector3>();
-
-            for (int i = 0; i < InNumPoints; i++)
-            {
-                Points.Add
-                (
-                    new Vector3
-                    (
-                        Random.Range(InPadding, InMapSizes.x - InPadding), 
-                        Random.Range(InPadding, InMapSizes.y - InPadding), 
-                        0
-                    )
-                );
-            }
-
-            return Points;
-        }
-
-        public List<Vector3> GeneratePoissonDistribution
-        (
-            int InTargetTiles, Vector2Int InMapSizes, float InRadius, int numMaxSamples, int InPadding
-        )
-        {
-            float CellSize = InRadius / Mathf.Sqrt(2);
-
-            int[,] Grid = new int[Mathf.CeilToInt(InMapSizes.x / CellSize), Mathf.CeilToInt(InMapSizes.y / CellSize)];
-            List<Vector3> Points = new List<Vector3>();
-            List<Vector3> SpawnPoints = new List<Vector3>();
-
-            SpawnPoints.Add(
-                new Vector3
-                (
-                    Mathf.CeilToInt(Random.Range(InPadding, InMapSizes.x - InPadding)), 
-                    Mathf.CeilToInt(Random.Range(InPadding, InMapSizes.y - InPadding)),
-                    0
-                )
-            );
-
-            //Points.Add(new Vector3(InPadding, InPadding, 0));
-            //Points.Add(new Vector3(InMapSizes.x - InPadding + 1, InPadding, 0));
-            //Points.Add(new Vector3(InPadding, InMapSizes.y - InPadding + 1, 0));
-            //Points.Add(new Vector3(InMapSizes.x - InPadding + 1, InMapSizes.y - InPadding + 1, 0));
-
-            Debug.Log("First point randomly chosen at " + SpawnPoints[0]);
-
-            while (SpawnPoints.Count > 0 && Points.Count < InTargetTiles)
-            {
-                int SpawnIndex = Random.Range(0, SpawnPoints.Count);
-                Vector3 SpawnCenter = SpawnPoints[SpawnIndex];
-                bool bCandidateAccepted = false;
-
-                for (int i = 0; i < numMaxSamples; i++)
-                {
-                    float Angle = Random.value * Mathf.PI * 2;
-                    Vector3 Direction = new Vector3(Mathf.Sin(Angle), Mathf.Cos(Angle), 0);
-                    Vector3 Candidate = SpawnCenter + Direction * Random.Range(InRadius, 2 * InRadius);
-                    if (IsValid(Candidate, InMapSizes, CellSize, InRadius, Points, Grid, InPadding))
-                    {
-                        Points.Add(Candidate);
-                        SpawnPoints.Add(Candidate);
-                        Grid[(int)(Candidate.x / CellSize), (int)(Candidate.y / CellSize)] = Points.Count;
-                        bCandidateAccepted = true;
-                        break;
-                    } 
-                }
-
-                if (!bCandidateAccepted)
-                {
-                    SpawnPoints.RemoveAt(SpawnIndex);
-                }
-            }
-
-            return Points;
         }
 
         public Mesh GenerateUnityMesh(TMesh triangleNetMesh, TQualityOptions options = null)
@@ -610,6 +525,208 @@ namespace ProceduralWorlds
             }
 
             return PolyMapRT;
+        }
+
+        public RenderTexture RenderPolygonalMap(string InName, Mesh InMapMesh, Texture2D InTexture, Material InMeshMaterial)
+        {
+            RenderTexture PolyMapRT = null;
+            if (InTexture != null && InMeshMaterial != null)
+            {
+                PolyMapRT = new RenderTexture(MapDimensions.x, MapDimensions.y, 0);
+                InMeshMaterial.mainTexture = InTexture;
+                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false);
+                if (bSaveDebugMaps)
+                {
+                    TextureGenerator.SaveMapAsPNG(InName, PolyMapRT);
+                }
+            }
+
+            return PolyMapRT;
+        }
+
+
+        public int[] TectonicPlatesFloodFill2D(BoundedVoronoi VorMap, List<int> InStartCells, bool bIsRandomSearch = false)
+        {
+            /* 
+                Idea is rather than starting from a specific point and visiting its neighbours according to a heuristic,
+                we'll instead swap between a set of starting points, which take turns visiting their neighbours which 
+                should result in a evenly divided map between the N input starting points.
+
+                Things we need:
+                A means of swapping between Face vertices & their corresponding Delaunay Triangulation Vertices for 
+                finding adjacent cells.
+
+                One closed list shared by all entities, as once a cell is assigned, it isn't being re-assigned!
+
+                But the Frontier/Open List, each entity needs their own?
+             */
+
+
+            /*
+             * Current problem is the flood fill isn't really "flood" filling, it seems to be skipping
+             * past some cells resulting in disjoint patches of coloured regions.
+             */
+            Vector2Int Hues = new Vector2Int(30, 330);
+            Vector2Int Saturation = new Vector2Int(99, 100);
+            Vector2Int Brightness = new Vector2Int(99, 100);
+            List<Color> DebugColours = TextureGenerator.GenerateHSVColours(InStartCells.Count + 1, Hues, Saturation, Brightness);
+            DebugColours[0] = Color.black;
+
+            int MaxCells = VorMap.Faces.Count;
+            int NumPlates = InStartCells.Count;
+            HashSet<int> ClosedList = new HashSet<int>();
+            HashSet<int> OpenedList = new HashSet<int>();
+            Queue<int>[] Frontiers = new Queue<int>[NumPlates];
+            int[] CellsToBeFilled = new int[MaxCells];
+
+            for (int i = 0; i < NumPlates; i++)
+            {
+                Frontiers[i] = new Queue<int>();
+                Frontiers[i].Enqueue(InStartCells[i]);
+                ClosedList.Add(InStartCells[i]);
+            }
+
+            int CurrentPlateIndex = 0;
+
+            int sum = Frontiers.Sum(collection => collection.Count);
+
+            int Iteration = 0;
+
+            while (Frontiers.Sum(collection => collection.Count) > 0)
+            {
+                Queue<int> CurrentQueue = Frontiers[CurrentPlateIndex];
+                if (CurrentQueue.Count <= 0)
+                {
+                    CurrentPlateIndex++;
+                    CurrentPlateIndex = CurrentPlateIndex % NumPlates;
+                    continue;
+                }
+
+                int CurrentFaceIndex = CurrentQueue.Dequeue();
+                while (CurrentFaceIndex < 0)
+                {
+                    CurrentFaceIndex = CurrentQueue.Dequeue();
+                }
+                if (CurrentFaceIndex < 0 || CurrentFaceIndex >= VorMap.Faces.Count)
+                {
+                    CurrentPlateIndex++;
+                    CurrentPlateIndex = CurrentPlateIndex % NumPlates;
+                    continue;
+                }
+
+                CellsToBeFilled[CurrentFaceIndex] = CurrentPlateIndex + 1;
+
+                TFace Face = VorMap.Faces[CurrentFaceIndex];
+                List<int> Neighbours = new List<int>();
+                List<THalfEdge> Edges = Face.EnumerateEdges().ToList();
+                foreach (var Edge in Edges)
+                {
+                    if (Edge.Twin != null && Edge.Twin.Face != null && Edge.Twin.Face != Face)
+                    {
+                        if (bIsRandomSearch)
+                        {
+                            Neighbours.Add(Edge.Twin.Face.ID);
+                        }
+                        else
+                        {
+                            if (!ClosedList.Contains(Edge.Twin.Face.ID))
+                            {
+                                if (Edge.Twin.Face.ID > -1)
+                                {
+                                    Frontiers[CurrentPlateIndex].Enqueue(Edge.Twin.Face.ID);
+                                    ClosedList.Add(Edge.Twin.Face.ID);
+                                }
+                            }                            
+                        }                        
+                    }
+                }
+
+                if (bIsRandomSearch)
+                {
+                    Neighbours.Shuffle();
+                    for (int j = 0; j < Neighbours.Count; j++)
+                    {
+                        if (!ClosedList.Contains(Neighbours[j]))
+                        {
+                            if (Neighbours[j] > -1)
+                            {
+                                Frontiers[CurrentPlateIndex].Enqueue(Neighbours[j]);
+                                ClosedList.Add(Neighbours[j]);
+                            }
+                        }
+                    }
+                }
+
+                if (CombinedVoronoiMesh != null)
+                {
+                    if (Iteration == 0)
+                    {
+                        //CellsToBeFilled[7] = 1;
+                        //CellsToBeFilled[8] = 0;
+                    }
+                    RenderPolygonalMap("DebugPlates" + Iteration, CombinedVoronoiMesh, 
+                        TextureGenerator.GenerateTectonicPlateTextureMap(MaxCells, CellsToBeFilled, DebugColours),
+                        TextureGenerator.GetUnlitTextureMaterial()
+                    );
+                }
+
+                Debug.Log("Iteration: " + Iteration + ", CurrentPlate: " + CurrentPlateIndex);
+                // take turns between entities
+                CurrentPlateIndex++;
+                CurrentPlateIndex = (CurrentPlateIndex % NumPlates);
+                Iteration++;
+            }
+
+            return CellsToBeFilled;
+        }
+
+        private int GetCellIDFromCoordinate(Vector3 InPoint, KDTree InKDTree, VQuery InQuery, ref List<int> InOutResults)
+        {
+            InOutResults.Clear();
+
+            InQuery.ClosestPoint(InKDTree, InPoint, InOutResults);
+
+            if (InOutResults.Count > 0)
+            {
+                return InOutResults[0];
+            }
+
+            return -1; // Not Found???
+        }
+
+        public List<int> GetCellIDsFromCoordinates(BoundedVoronoi InVoronoi, List<Vector3> InListPoints)
+        {
+            // Get a list of Vector3 coordinates (corresponding to locations picked via poisson disc distribution)
+            // And return a list of indices to their corresponding voronoi faces
+            List<int> Results = new List<int>();
+            List<int> TempResults = new List<int>();
+            // Convert a list of 2D coordinates into a list of corresponding 
+
+            KDTree SiteKDTree = GetVoronoiSiteKDTree(ConvertVoronoiCellsToVec3(InVoronoi));
+            VQuery SiteQuery = new VQuery();
+
+            foreach (var Coordinate in InListPoints)
+            {
+                Results.Add(GetCellIDFromCoordinate(Coordinate, SiteKDTree, SiteQuery, ref TempResults));
+            }
+
+            return Results;
+        }
+
+        private List<Vector3> ConvertVoronoiCellsToVec3(BoundedVoronoi InVoronoi)
+        {
+            List<Vector3> OutCoords = new List<Vector3>();
+            foreach (var Face in InVoronoi.Faces)
+            {
+                OutCoords.Add(new Vector3((float)Face.generator.X, (float)Face.generator.Y, 0));
+            }
+
+            return OutCoords;
+        }
+
+        private KDTree GetVoronoiSiteKDTree(List<Vector3> InVoronoiSiteCoords)
+        {
+            return new KDTree(InVoronoiSiteCoords.ToArray(), 32);
         }
     }
 }

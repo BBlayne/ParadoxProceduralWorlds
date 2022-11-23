@@ -143,7 +143,7 @@ public static class TextureGenerator
         GL.Clear(true, true, new Color(0, 0, 0, 0));
         Graphics.DrawTexture(new Rect(0, 0, 1, 1), inSrc);
 
-        inSrc.Resize(inNewWidth, inNewHeight);
+        inSrc.Reinitialize(inNewWidth, inNewHeight);
 
         inSrc.ReadPixels(texR, 0, 0);
 
@@ -833,21 +833,44 @@ public static class TextureGenerator
         return temp;
     }
 
+    public static Texture2D GenerateTectonicPlateTextureMap(int InNuMCells, int[] InCellByID, List<Color> InColours)
+    {
+        Texture2D OutTex = new Texture2D(InNuMCells, 1, TextureFormat.RGBA32, false);
+        OutTex.filterMode = FilterMode.Point;
+        OutTex.wrapMode = TextureWrapMode.Clamp;
+
+        List<Color> CellColours = new List<Color>();
+
+        for (int i = 0; i < InNuMCells; i++)
+        {
+            CellColours.Add(InColours[InCellByID[i]]);
+        }
+
+        OutTex.SetPixels(CellColours.ToArray());
+        OutTex.Apply();
+
+        TextureGenerator.SaveMapAsPNG("Test", OutTex);
+
+        return OutTex;
+    }
+
     public static Texture2D GenerateBiColourElevationTextureMap(int InNumCells, ProceduralWorlds.MapCell[] InMapCells)
     {
         int NumGradients = 100;
 
         Texture2D OutTex = new Texture2D(InNumCells, 1, TextureFormat.RGBA32, false);
+        OutTex.filterMode = FilterMode.Point;
+        OutTex.wrapMode = TextureWrapMode.Clamp;
 
         Vector2Int LandHues = new Vector2Int(30, 330);
-        Vector2Int LandSaturation = new Vector2Int(0, 10);
-        Vector2Int LandBrightness = new Vector2Int(40, 100);
+        Vector2Int LandSaturation = new Vector2Int(0, 1);
+        Vector2Int LandBrightness = new Vector2Int(99, 100);
 
         List<Color> LandElevationColours = GenerateHSVColours(NumGradients, LandHues, LandSaturation, LandBrightness, 0);
 
         Vector2Int WaterHues = new Vector2Int(160, 250);
-        Vector2Int WaterSaturation = new Vector2Int(50, 100);
-        Vector2Int WaterBrightness = new Vector2Int(50, 100);
+        Vector2Int WaterSaturation = new Vector2Int(0, 1);
+        Vector2Int WaterBrightness = new Vector2Int(0, 1);
         List<Color> WaterElevationColours = GenerateHSVColours(NumGradients, WaterHues, WaterSaturation, WaterBrightness, 0);
         List<Color> CellColours = new List<Color>();
         for (int i = 0; i < InNumCells; i++)
