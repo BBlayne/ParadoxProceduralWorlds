@@ -126,14 +126,27 @@ public class WorldGenerator : MonoBehaviour
     {
         ResetRtx(PolyMapRT);
 
-        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", 10);
+        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", 1000);
         PolyMapGen.SetDistributionMode(ProceduralWorlds.ESiteDistribution.RANDOM);
+        int MapPadding = 25;
+        PolyMapGen.SetPadding(MapPadding);
         Vector2Int WorldSizes = new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight);
         PolyMapGen.MapDimensions = WorldSizes;
         Mesh WorldMapMesh = PolyMapGen.GeneratePolygonalMapMesh();
 
-        int NumTectonicPlates = 2;
-        int[] VoronoiTectonicCells = GenerateTectonicPlates(PolyMapGen.MapDimensions, NumTectonicPlates, 25, PolyMapGen.Vor, false);
+        int NumTectonicPlates = 15;
+        int PoissonPlatesRadius = 256;
+        bool bIsRandomFloodFill = true;
+        int[] VoronoiTectonicCells = GenerateTectonicPlates
+        (
+            PolyMapGen.MapDimensions, 
+            NumTectonicPlates, 
+            MapPadding, 
+            PolyMapGen.Vor, 
+            bIsRandomFloodFill, 
+            PoissonPlatesRadius
+        );
+
         Vector2Int Hues = new Vector2Int(30, 330);
         Vector2Int Saturation = new Vector2Int(99, 100);
         Vector2Int Brightness = new Vector2Int(99, 100);
@@ -159,9 +172,9 @@ public class WorldGenerator : MonoBehaviour
         return OutPoints;
     }
 
-    private int[] GenerateTectonicPlates(Vector2Int InWorldSizes, int InNumPlates, int InPadding, BoundedVoronoi InMapCells, bool bIsRandom)
+    private int[] GenerateTectonicPlates(Vector2Int InWorldSizes, int InNumPlates, int InPadding, BoundedVoronoi InMapCells, bool bIsRandom, int InPoissonRadius)
     {
-        List<Vector3> PlatePointCenters = PickPoissonRandomPoints(InWorldSizes, InNumPlates, InPadding, 256);
+        List<Vector3> PlatePointCenters = PickPoissonRandomPoints(InWorldSizes, InNumPlates, InPadding, InPoissonRadius);
 
         List<int> PlateCentersFaceIndices = PolyMapGen.GetCellIDsFromCoordinates(InMapCells, PlatePointCenters);
 

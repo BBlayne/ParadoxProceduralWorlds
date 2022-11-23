@@ -54,6 +54,8 @@ namespace ProceduralWorlds
 
         public int NumberOfTargetCells = 0;
 
+        public int MapPadding = 25;
+
         public bool bSaveDebugMaps = true;
 
         public RenderTexture MainRTex = null;
@@ -102,20 +104,25 @@ namespace ProceduralWorlds
             InitialSites = InSites;
         }
 
-        public void GenerateSiteDistribution(int InPadding = 25)
+        public void SetPadding(int InPadding)
+        {
+            MapPadding = InPadding;
+        }
+
+        public void GenerateSiteDistribution()
         {
             switch (SiteDistributionMode)
             {
             case ESiteDistribution.RANDOM:
             default:
-                InitialSites = MapUtils.GenerateRandomPoints2D(NumberOfTargetCells, MapDimensions, InPadding).ToArray();
+                InitialSites = MapUtils.GenerateRandomPoints2D(NumberOfTargetCells, MapDimensions, MapPadding).ToArray();
                 break;
             }
         }
 
         public Mesh GeneratePolygonalMapMesh()
         {
-            GenerateSiteDistribution(25);
+            GenerateSiteDistribution();
             TMesh Triangulation = GenerateDelaunayTriangulation(InitialSites, 2);
             Triang = Triangulation;
 
@@ -123,7 +130,8 @@ namespace ProceduralWorlds
             MoveVoronoiVerticesToDelauneyCentroids(mBoundedVoronoi, 2.5f);
             Vor = mBoundedVoronoi;
 
-            List<Mesh> VorCellMeshes = TriangulateVoronoiCells(Vor);            
+            List<Mesh> VorCellMeshes = TriangulateVoronoiCells(Vor);
+            Debug.Log("");
             RandomLandDistribution(Vor.Faces.Count, 0.25f);
             Texture2D VoronoiTexture = TextureGenerator.GenerateBiColourElevationTextureMap(VorCellMeshes.Count, MapCells);
             if (bSaveDebugMaps)
@@ -377,24 +385,20 @@ namespace ProceduralWorlds
 
             for (int VorIndex = 0; VorIndex < InVorGraph.Faces.Count; VorIndex++)
             {
-                Polygon DelaneyShape = new Polygon();
-                var CurrentEdge = InVorGraph.Faces[VorIndex].Edge;
-                if (CurrentEdge != null)
+                TFace CurrentFace = InVorGraph.Faces[VorIndex];
+                if (CurrentFace == null)
                 {
-                    var FirstEdge = CurrentEdge;
-                    while (CurrentEdge.Next != null && CurrentEdge.Next != FirstEdge)
-                    {
-                        TVertex VertexToAdd = new TVertex(CurrentEdge.Origin.x, CurrentEdge.Origin.y);
-                        DelaneyShape.Add(VertexToAdd);
+                    continue;
+                }
 
-                        CurrentEdge = CurrentEdge.Next;                       
-                    }
+                List<THalfEdge> CurrentFaceEdges = CurrentFace.EnumerateEdges().ToList();
+                Polygon DelaneyShape = new Polygon();
 
-                    if (CurrentEdge.Next != null)
-                    {
-                        TVertex VertexToAdd = new TVertex(CurrentEdge.Origin.x, CurrentEdge.Origin.y);
-                        DelaneyShape.Add(VertexToAdd);
-                    }
+                // Better method
+                foreach (THalfEdge CurrentFaceEdge in CurrentFaceEdges)
+                {
+                    TVertex VertexToAdd = new TVertex(CurrentFaceEdge.Origin.x, CurrentFaceEdge.Origin.y);
+                    DelaneyShape.Add(VertexToAdd);
                 }
                 DelaneyShape.Bounds();
 
@@ -408,10 +412,12 @@ namespace ProceduralWorlds
         {
             for (int i = 0; i < InVoronoiTriangulations.Count; i++)
             {
-                List<Vector2> MeshUVs = new List<Vector2>();                
+                List<Vector2> MeshUVs = new List<Vector2>();
+                float Offset = 0.5f / InVoronoiTriangulations.Count;
                 for (int j = 0; j < InVoronoiTriangulations[i].vertexCount; j++)
                 {
-                    MeshUVs.Add(new Vector2((float)i / InVoronoiTriangulations.Count, 0.0f));
+                    float NuU = ((float)i / InVoronoiTriangulations.Count) + Offset;
+                    MeshUVs.Add(new Vector2(NuU, 0.0f));
                 }
                 InVoronoiTriangulations[i].uv = MeshUVs.ToArray();
             }            
@@ -659,18 +665,13 @@ namespace ProceduralWorlds
 
                 if (CombinedVoronoiMesh != null)
                 {
-                    if (Iteration == 0)
-                    {
-                        //CellsToBeFilled[7] = 1;
-                        //CellsToBeFilled[8] = 0;
-                    }
-                    RenderPolygonalMap("DebugPlates" + Iteration, CombinedVoronoiMesh, 
-                        TextureGenerator.GenerateTectonicPlateTextureMap(MaxCells, CellsToBeFilled, DebugColours),
-                        TextureGenerator.GetUnlitTextureMaterial()
-                    );
+                    //RenderPolygonalMap("DebugPlates" + Iteration, CombinedVoronoiMesh, 
+                    //    TextureGenerator.GenerateTectonicPlateTextureMap(MaxCells, CellsToBeFilled, DebugColours),
+                    //    TextureGenerator.GetUnlitTextureMaterial()
+                    //);
                 }
 
-                Debug.Log("Iteration: " + Iteration + ", CurrentPlate: " + CurrentPlateIndex);
+                //Debug.Log("Iteration: " + Iteration + ", CurrentPlate: " + CurrentPlateIndex);
                 // take turns between entities
                 CurrentPlateIndex++;
                 CurrentPlateIndex = (CurrentPlateIndex % NumPlates);
