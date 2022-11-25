@@ -24,7 +24,8 @@ namespace ProceduralWorlds
 {
     public enum ESiteDistribution
     {
-        RANDOM
+        RANDOM,
+        POISSON
     }
 
     public enum ECellColour
@@ -57,6 +58,7 @@ namespace ProceduralWorlds
         public int MapPadding = 25;
 
         public bool bSaveDebugMaps = true;
+        public bool bSaveDebugIncrementalFloodFillMaps = false;
 
         public RenderTexture MainRTex = null;
 
@@ -64,6 +66,7 @@ namespace ProceduralWorlds
         public TMesh Triang = null;
 
         private Mesh CombinedVoronoiMesh = null;
+
 
         public PolygonalMapGenerator(int InNumCells)
         {
@@ -107,6 +110,32 @@ namespace ProceduralWorlds
         public void SetPadding(int InPadding)
         {
             MapPadding = InPadding;
+        }
+
+        public List<Vector3> GenerateSiteDistribution
+        (
+            ESiteDistribution InSiteDistribution, 
+            int InTargetNumberSites, 
+            Vector2Int InMapDims, 
+            int InPadding,
+            List<Vector3> InSupplementSites
+        )
+        {
+            switch (InSiteDistribution)
+            {
+            case ESiteDistribution.POISSON:
+                return MapUtils.GetPoissonDistributedPoints2D(
+                    InMapDims,
+                    MapUtils.DetermineRadiusForPoissonDisc(InMapDims, InTargetNumberSites), 
+                    30, 
+                    InPadding,
+                    InSupplementSites,
+                    InTargetNumberSites
+                );
+            case ESiteDistribution.RANDOM:
+            default:
+                return MapUtils.GenerateRandomPoints2D(InTargetNumberSites, InMapDims, InPadding);
+            }
         }
 
         public void GenerateSiteDistribution()
@@ -448,16 +477,6 @@ namespace ProceduralWorlds
             }
         }
 
-        // TODO
-        // To triangulate a voronoi mesh such that its polygons are drawable and texturable;
-        // I need to loop through each voronoi cell:
-        // Triangulate the cell, one at a time; adding the resulting triangulation as a shape to a List
-        // where the index of trianglenet mesh corresponds to the voronoi cell.
-        // Then I can assign a single colour to these vertices via UVs.
-        // Either procedurally generated 2D texture with a bunch of colours
-        // or a test texture with just a few colours to test. i.e white and black.
-        // And then blit the non-wireframe version.
-
         // Adjusting Voronoi Vertices into Centroids of the Delaunay Triangles
         public void MoveVoronoiVerticesToDelauneyCentroids(BoundedVoronoi InVor, float InRange)
         {
@@ -593,88 +612,115 @@ namespace ProceduralWorlds
             }
 
             int CurrentPlateIndex = 0;
+            int MinimumBlobSize = 4;
+            int MaxIterations = Mathf.RoundToInt(Mathf.Min(MaxCells, MinimumBlobSize * NumPlates));
+            int Iteration = 0;
+            // As we might be doing random flood fill, we'll iterate over the initial points
+            // at least once. Potentially N by M times so each Blob has a minimum of M cells.
+            while (Iteration < MaxIterations)
+            {
+                for (int i = 0; i < NumPlates; i++)
+                {
+                    Queue<int> CurrentQueue = Frontiers[i];
+                    if (CurrentQueue.Count <= 0)
+                    {
+                        continue;
+                    }
+
+                    int CurrentFaceIndex = CurrentQueue.Dequeue();
+                    // Annoyingly some faces have a invalid negative index
+                    // for esoteric voronoi computational reasons...
+                    while (CurrentFaceIndex < 0 && CurrentQueue.Count > 0)
+                    {
+                        CurrentFaceIndex = CurrentQueue.Dequeue();
+                    }
+
+                    if (CurrentFaceIndex < 0)
+                    {
+                        continue;
+                    }
+
+                    CellsToBeFilled[CurrentFaceIndex] = i + 1; // Offset so all cells default are black
+
+                    TFace Face = VorMap.Faces[CurrentFaceIndex];
+                    List<THalfEdge> Edges = Face.EnumerateEdges().ToList();
+                    foreach (var Edge in Edges)
+                    {
+                        if (Edge.Twin != null && Edge.Twin.Face != null && Edge.Twin.Face != Face)
+                        {
+                            if (!ClosedList.Contains(Edge.Twin.Face.ID))
+                            {
+                                Frontiers[i].Enqueue(Edge.Twin.Face.ID);
+                                ClosedList.Add(Edge.Twin.Face.ID);
+                            }
+                        }
+                    }
+                    Iteration++;
+                }                
+            }
 
             int sum = Frontiers.Sum(collection => collection.Count);
-
-            int Iteration = 0;
-
             while (Frontiers.Sum(collection => collection.Count) > 0)
             {
                 Queue<int> CurrentQueue = Frontiers[CurrentPlateIndex];
                 if (CurrentQueue.Count <= 0)
                 {
-                    CurrentPlateIndex++;
-                    CurrentPlateIndex = CurrentPlateIndex % NumPlates;
+                    CurrentPlateIndex = (CurrentPlateIndex + 1) % NumPlates;
                     continue;
                 }
 
                 int CurrentFaceIndex = CurrentQueue.Dequeue();
-                while (CurrentFaceIndex < 0)
+                while (CurrentFaceIndex < 0 && CurrentQueue.Count > 0)
                 {
                     CurrentFaceIndex = CurrentQueue.Dequeue();
                 }
-                if (CurrentFaceIndex < 0 || CurrentFaceIndex >= VorMap.Faces.Count)
+
+                if (CurrentFaceIndex < 0)
                 {
-                    CurrentPlateIndex++;
-                    CurrentPlateIndex = CurrentPlateIndex % NumPlates;
+                    CurrentPlateIndex = (CurrentPlateIndex + 1) % NumPlates;
                     continue;
                 }
 
                 CellsToBeFilled[CurrentFaceIndex] = CurrentPlateIndex + 1;
 
                 TFace Face = VorMap.Faces[CurrentFaceIndex];
-                List<int> Neighbours = new List<int>();
                 List<THalfEdge> Edges = Face.EnumerateEdges().ToList();
                 foreach (var Edge in Edges)
                 {
                     if (Edge.Twin != null && Edge.Twin.Face != null && Edge.Twin.Face != Face)
                     {
-                        if (bIsRandomSearch)
+                        if (!ClosedList.Contains(Edge.Twin.Face.ID))
                         {
-                            Neighbours.Add(Edge.Twin.Face.ID);
-                        }
-                        else
-                        {
-                            if (!ClosedList.Contains(Edge.Twin.Face.ID))
+                            if (Edge.Twin.Face.ID > -1)
                             {
-                                if (Edge.Twin.Face.ID > -1)
-                                {
-                                    Frontiers[CurrentPlateIndex].Enqueue(Edge.Twin.Face.ID);
-                                    ClosedList.Add(Edge.Twin.Face.ID);
-                                }
-                            }                            
-                        }                        
-                    }
-                }
-
-                if (bIsRandomSearch)
-                {
-                    Neighbours.Shuffle();
-                    for (int j = 0; j < Neighbours.Count; j++)
-                    {
-                        if (!ClosedList.Contains(Neighbours[j]))
-                        {
-                            if (Neighbours[j] > -1)
-                            {
-                                Frontiers[CurrentPlateIndex].Enqueue(Neighbours[j]);
-                                ClosedList.Add(Neighbours[j]);
+                                Frontiers[CurrentPlateIndex].Enqueue(Edge.Twin.Face.ID);
+                                ClosedList.Add(Edge.Twin.Face.ID);
                             }
                         }
                     }
                 }
 
-                if (CombinedVoronoiMesh != null)
+                if (bSaveDebugIncrementalFloodFillMaps)
                 {
-                    //RenderPolygonalMap("DebugPlates" + Iteration, CombinedVoronoiMesh, 
-                    //    TextureGenerator.GenerateTectonicPlateTextureMap(MaxCells, CellsToBeFilled, DebugColours),
-                    //    TextureGenerator.GetUnlitTextureMaterial()
-                    //);
+                    if (CombinedVoronoiMesh != null)
+                    {
+                        RenderPolygonalMap("DebugPlates" + Iteration, CombinedVoronoiMesh, 
+                            TextureGenerator.GenerateTectonicPlateTextureMap(MaxCells, CellsToBeFilled, DebugColours),
+                            TextureGenerator.GetUnlitTextureMaterial()
+                        );
+                    }
                 }
 
-                //Debug.Log("Iteration: " + Iteration + ", CurrentPlate: " + CurrentPlateIndex);
-                // take turns between entities
-                CurrentPlateIndex++;
-                CurrentPlateIndex = (CurrentPlateIndex % NumPlates);
+                if (bIsRandomSearch)
+                {
+                    CurrentPlateIndex = Random.Range(0, NumPlates);
+                }
+                else
+                {
+                    CurrentPlateIndex++;
+                    CurrentPlateIndex = CurrentPlateIndex % NumPlates;
+                }
+
                 Iteration++;
             }
 

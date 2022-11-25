@@ -25,6 +25,66 @@ public static class IListExtensions
 
 public static class MapUtils
 {
+    public static List<Vector3> GenerateSiteDistribution
+    (
+        ProceduralWorlds.ESiteDistribution InSiteDistribution,
+        int InTargetNumberSites,
+        Vector2Int InMapDims,
+        int InPadding,
+        int InRadius,
+        List<Vector3> InSupplementSites
+    )
+    {
+        switch (InSiteDistribution)
+        {
+        case ProceduralWorlds.ESiteDistribution.POISSON:
+            return MapUtils.GetPoissonDistributedPoints2D(
+                InMapDims,
+                InRadius,
+                30,
+                InPadding,
+                InSupplementSites,
+                InTargetNumberSites
+            );
+        case ProceduralWorlds.ESiteDistribution.RANDOM:
+        default:
+            return MapUtils.GenerateRandomPoints2D(InTargetNumberSites, InMapDims, InPadding);
+        }
+    }
+
+    public static List<Vector3> GenerateSiteDistribution
+    (
+        ProceduralWorlds.ESiteDistribution InSiteDistribution,
+        int InTargetNumberSites,
+        Vector2Int InMapDims,
+        int InPadding,
+        List<Vector3> InSupplementSites
+    )
+    {
+        switch (InSiteDistribution)
+        {
+        case ProceduralWorlds.ESiteDistribution.POISSON:
+            return MapUtils.GetPoissonDistributedPoints2D(
+                InMapDims,
+                MapUtils.DetermineRadiusForPoissonDisc(InMapDims, InTargetNumberSites),
+                30,
+                InPadding,
+                InSupplementSites,
+                InTargetNumberSites
+            );
+        case ProceduralWorlds.ESiteDistribution.RANDOM:
+        default:
+            return MapUtils.GenerateRandomPoints2D(InTargetNumberSites, InMapDims, InPadding);
+        }
+    }
+
+    public static int DetermineRadiusForPoissonDisc(Vector2Int InMapSizes, int InSites)
+    {
+        int Area = InMapSizes.x * InMapSizes.y;
+        float N = (float)Area / InSites;
+        float MN = Mathf.Round(Mathf.Sqrt(N));
+        return Mathf.RoundToInt(MN / 2) + Mathf.RoundToInt(MN / 4);
+    }
 
     private static bool IsValid
     (
@@ -159,9 +219,12 @@ public static class MapUtils
             )
         );
 
-        for (int i = 0; i < InPoints.Count; i++)
+        if (InPoints != null)
         {
-            OutPoints.Add(InPoints[i]);
+            for (int i = 0; i < InPoints.Count; i++)
+            {
+                OutPoints.Add(InPoints[i]);
+            }
         }
 
         while (SpawnPoints.Count > 0 && OutPoints.Count < InMaxPoints)

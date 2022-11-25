@@ -71,6 +71,12 @@ public class WorldGenerator : MonoBehaviour
     public Texture2D VoronoiTexture = null;
 
     public int TargetNumberOfCells = 1000;
+    public int MapPadding = 25;
+    public int NumberOfTectonicPlates = 30;
+    public int NumberOfContinents = 3;
+    public float WorldLandmassPercentage = 0.25f;
+    public bool bIsRandomFloodFill = false;
+    public bool bOutputDebugMaps = true;
 
     private string AppPath = "";
 
@@ -126,25 +132,25 @@ public class WorldGenerator : MonoBehaviour
     {
         ResetRtx(PolyMapRT);
 
-        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", 1000);
+        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", TargetNumberOfCells);
         PolyMapGen.SetDistributionMode(ProceduralWorlds.ESiteDistribution.RANDOM);
-        int MapPadding = 25;
         PolyMapGen.SetPadding(MapPadding);
         Vector2Int WorldSizes = new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight);
         PolyMapGen.MapDimensions = WorldSizes;
-        Mesh WorldMapMesh = PolyMapGen.GeneratePolygonalMapMesh();
+        int NumTectonicPlates = NumberOfTectonicPlates;
 
-        int NumTectonicPlates = 15;
-        int PoissonPlatesRadius = 256;
-        bool bIsRandomFloodFill = true;
+        // World Map Generation
+        Mesh WorldMapMesh = PolyMapGen.GeneratePolygonalMapMesh();
+        int TotalNumberVorCells = PolyMapGen.Vor.Faces.Count;
+
+        //int PoissonPlatesRadius = 256; // relative to pixel dimensions of our target texture for rendering
         int[] VoronoiTectonicCells = GenerateTectonicPlates
         (
             PolyMapGen.MapDimensions, 
             NumTectonicPlates, 
             MapPadding, 
             PolyMapGen.Vor, 
-            bIsRandomFloodFill, 
-            PoissonPlatesRadius
+            bIsRandomFloodFill
         );
 
         Vector2Int Hues = new Vector2Int(30, 330);
@@ -156,10 +162,10 @@ public class WorldGenerator : MonoBehaviour
 
         ResetRtx(PolyMapRT);
 
-        Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(PolyMapGen.Vor.Faces.Count, VoronoiTectonicCells, PlateColours);
+        Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(TotalNumberVorCells, VoronoiTectonicCells, PlateColours);
         PolyMapRT = PolyMapGen.RenderPolygonalMap(WorldMapMesh, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());
 
-        UpdateMapDisplay(PolyMapRT);
+        UpdateMapDisplay(PolyMapRT, WorldSizes);
     }
 
     private List<Vector3> PickPoissonRandomPoints(Vector2Int InWorldSizes, int InNumPoints, int InPadding, int InRadius)
@@ -172,9 +178,54 @@ public class WorldGenerator : MonoBehaviour
         return OutPoints;
     }
 
-    private int[] GenerateTectonicPlates(Vector2Int InWorldSizes, int InNumPlates, int InPadding, BoundedVoronoi InMapCells, bool bIsRandom, int InPoissonRadius)
+    private List<Vector3> GenerateTectonicPlateSeedPoints(Vector2Int InWorldSizes, int InPadding, int InNumPlates)
     {
-        List<Vector3> PlatePointCenters = PickPoissonRandomPoints(InWorldSizes, InNumPlates, InPadding, InPoissonRadius);
+        List<Vector3> OutPlateSites = new List<Vector3>();
+
+        // Get Initial Sample Sites either Randomly or via Poisson Disc Sampling
+        int PoissonRadius = MapUtils.DetermineRadiusForPoissonDisc(InWorldSizes, InNumPlates);
+        ProceduralWorlds.ESiteDistribution PlateSiteDistribution = ProceduralWorlds.ESiteDistribution.RANDOM;
+        List<Vector3> InitialSamplePoints = MapUtils.GenerateSiteDistribution(
+            PlateSiteDistribution,
+            InNumPlates,
+            InWorldSizes,
+            InPadding,
+            PoissonRadius,
+            null
+        );
+
+        // Get the barycentric dual mesh, we'll extract the tectonic plate seed points from the voronoi diagram
+        TMesh PlateTriang = PolyMapGen.GenerateDelaunayTriangulation(InitialSamplePoints.ToArray(), 5);
+        BoundedVoronoi PlateVor = PolyMapGen.GetVoronoiTesselationFromTriangulation(PlateTriang);
+        if (bOutputDebugMaps)
+        {
+            Mesh PlateTriangMesh = PolyMapGen.GenerateUnityMeshFromTriangleNetMesh(PlateTriang);
+            RenderTexture PlateTriangMeshRT = TextureGenerator.BlitMeshToRT(PlateTriangMesh, InWorldSizes, TextureGenerator.GetUnlitMaterial());
+            TextureGenerator.SaveMapAsPNG("PlateTriangRT", PlateTriangMeshRT);
+            ResetRtx(PlateTriangMeshRT);
+            Mesh PlateSiteMesh = PolyMapGen.GenerateVoronoiUnityMesh(PlateVor);
+            RenderTexture PlateRT = TextureGenerator.BlitMeshToRT(PlateSiteMesh, InWorldSizes, TextureGenerator.GetUnlitMaterial());
+            TextureGenerator.SaveMapAsPNG("PlateVoronoiRT", PlateRT);
+            ResetRtx(PlateRT);
+        }
+
+        foreach (var VorFace in PlateVor.Faces)
+        {
+            if (VorFace.ID != -1 && VorFace.bounded)
+            {
+                float Jitter = Random.Range(-PoissonRadius / 2, PoissonRadius / 2);
+                float NuEcks = (float)VorFace.generator.X + Jitter;
+                float NuWhy = (float)VorFace.generator.Y + Jitter;
+                OutPlateSites.Add(new Vector3(NuEcks, NuWhy));
+            }
+        }
+
+        return OutPlateSites;
+    }
+
+    private int[] GenerateTectonicPlates(Vector2Int InWorldSizes, int InNumPlates, int InPadding, BoundedVoronoi InMapCells, bool bIsRandom)
+    {
+        List<Vector3> PlatePointCenters = GenerateTectonicPlateSeedPoints(InWorldSizes, InPadding, InNumPlates);
 
         List<int> PlateCentersFaceIndices = PolyMapGen.GetCellIDsFromCoordinates(InMapCells, PlatePointCenters);
 
@@ -192,13 +243,14 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
-    private void UpdateMapDisplay(RenderTexture InMapRtx)
+    private void UpdateMapDisplay(RenderTexture InMapRtx, Vector2Int InWorldSizes)
     {
         if (mapDisplay != null && InMapRtx != null && mapDisplay.MapDisplayImgTarget != null)
         {
             InMapRtx.filterMode = FilterMode.Point;
 
             mapDisplay.MapDisplayImgTarget.texture = InMapRtx;
+            mapDisplay.UpdateMapDisplayRatio(InWorldSizes.x, InWorldSizes.y);
         }
     }
 
@@ -281,7 +333,7 @@ public class WorldGenerator : MonoBehaviour
             //GenerateWorld();
             if (_silhouetteMap != null)
             {
-                UpdateMapDisplay(_silhouetteMap);
+                UpdateMapDisplay(_silhouetteMap, new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight));
             }
         }
     }

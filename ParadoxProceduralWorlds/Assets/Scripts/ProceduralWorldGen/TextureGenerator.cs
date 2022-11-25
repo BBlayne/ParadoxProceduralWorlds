@@ -849,7 +849,7 @@ public static class TextureGenerator
         OutTex.SetPixels(CellColours.ToArray());
         OutTex.Apply();
 
-        TextureGenerator.SaveMapAsPNG("Test", OutTex);
+        SaveMapAsPNG("TectonicPlateTextureMap", OutTex);
 
         return OutTex;
     }
@@ -936,5 +936,10 @@ public static class TextureGenerator
     public static Material GetUnlitTextureMaterial()
     {
         return Resources.Load("Materials/UnlitTextureMapMaterial", typeof(Material)) as Material;
+    }
+
+    public static Material GetUnlitMaterial()
+    {
+        return Resources.Load("Materials/UnlitMapMaterial", typeof(Material)) as Material;
     }
 }
