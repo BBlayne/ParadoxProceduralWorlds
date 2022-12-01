@@ -180,6 +180,9 @@ public class WorldGenerator : MonoBehaviour
 
     private List<Vector3> GenerateTectonicPlateSeedPoints(Vector2Int InWorldSizes, int InPadding, int InNumPlates)
     {
+        // If I can't end up with a different implementation for continents might need to rename this to something
+        // More generic, like "GenerateWorldFeaturePoints(...)" for landmasses, plates, etc.
+
         List<Vector3> OutPlateSites = new List<Vector3>();
 
         // Get Initial Sample Sites either Randomly or via Poisson Disc Sampling
@@ -233,11 +236,18 @@ public class WorldGenerator : MonoBehaviour
         return PolyMapGen.TectonicPlatesFloodFill2D(InMapCells, PlateCentersFaceIndices, bIsRandom);
     }
 
-    private void GenerateContinents(Vector2Int InWorldSizes, int InNumContinents, int InPadding)
-    {
-        List<Vector3> ContinentPoints = PickPoissonRandomPoints(InWorldSizes, InNumContinents, InPadding, 128);
 
-        for (int i = 0; i < ContinentPoints.Count; i++)
+
+    private void GenerateContinents(BoundedVoronoi InVor, Vector2Int InWorldSizes, int InNumContinents, int InPadding, float LandWaterRatio)
+    {
+        // Initial Continents are generated semi-randomly similar to plates, but instead of random flood-filling
+        // until the entire map is filled, we halt for each continent once its reached a specified number of cells.
+        // As such, given a total number of cells, we derive the amount of land cells from the ratio. i.e 30% Land vs 70% Water.
+        int TotalLandCellCount = Mathf.RoundToInt(LandWaterRatio * InVor.Faces.Count);
+
+        List<Vector3> ContinentPointCenters = GenerateTectonicPlateSeedPoints(InWorldSizes, InPadding, InNumContinents);
+
+        for (int i = 0; i < ContinentPointCenters.Count; i++)
         {
 
         }

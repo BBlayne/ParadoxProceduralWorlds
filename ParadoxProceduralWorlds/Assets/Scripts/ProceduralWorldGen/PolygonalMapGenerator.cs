@@ -600,14 +600,13 @@ namespace ProceduralWorlds
             int MaxCells = VorMap.Faces.Count;
             int NumPlates = InStartCells.Count;
             HashSet<int> ClosedList = new HashSet<int>();
-            HashSet<int> OpenedList = new HashSet<int>();
-            Queue<int>[] Frontiers = new Queue<int>[NumPlates];
+            Heap<Priority>[] Frontiers = new Heap<Priority>[NumPlates];
             int[] CellsToBeFilled = new int[MaxCells];
 
             for (int i = 0; i < NumPlates; i++)
             {
-                Frontiers[i] = new Queue<int>();
-                Frontiers[i].Enqueue(InStartCells[i]);
+                Frontiers[i] = new Heap<Priority>(MaxCells);
+                Frontiers[i].Add(new Priority(InStartCells[i], 0));
                 ClosedList.Add(InStartCells[i]);
             }
 
@@ -621,18 +620,18 @@ namespace ProceduralWorlds
             {
                 for (int i = 0; i < NumPlates; i++)
                 {
-                    Queue<int> CurrentQueue = Frontiers[i];
+                    Heap<Priority> CurrentQueue = Frontiers[i];
                     if (CurrentQueue.Count <= 0)
                     {
                         continue;
                     }
 
-                    int CurrentFaceIndex = CurrentQueue.Dequeue();
+                    int CurrentFaceIndex = CurrentQueue.RemoveFirst().Value;
                     // Annoyingly some faces have a invalid negative index
                     // for esoteric voronoi computational reasons...
                     while (CurrentFaceIndex < 0 && CurrentQueue.Count > 0)
                     {
-                        CurrentFaceIndex = CurrentQueue.Dequeue();
+                        CurrentFaceIndex = CurrentQueue.RemoveFirst().Value;
                     }
 
                     if (CurrentFaceIndex < 0)
@@ -650,7 +649,8 @@ namespace ProceduralWorlds
                         {
                             if (!ClosedList.Contains(Edge.Twin.Face.ID))
                             {
-                                Frontiers[i].Enqueue(Edge.Twin.Face.ID);
+                                int Rank = bIsRandomSearch ? Random.Range(0, MaxCells * 100) : ClosedList.Count;
+                                Frontiers[i].Add(new Priority(Edge.Twin.Face.ID, Rank));
                                 ClosedList.Add(Edge.Twin.Face.ID);
                             }
                         }
@@ -662,17 +662,17 @@ namespace ProceduralWorlds
             int sum = Frontiers.Sum(collection => collection.Count);
             while (Frontiers.Sum(collection => collection.Count) > 0)
             {
-                Queue<int> CurrentQueue = Frontiers[CurrentPlateIndex];
+                Heap<Priority> CurrentQueue = Frontiers[CurrentPlateIndex];
                 if (CurrentQueue.Count <= 0)
                 {
                     CurrentPlateIndex = (CurrentPlateIndex + 1) % NumPlates;
                     continue;
                 }
 
-                int CurrentFaceIndex = CurrentQueue.Dequeue();
+                int CurrentFaceIndex = CurrentQueue.RemoveFirst().Value;
                 while (CurrentFaceIndex < 0 && CurrentQueue.Count > 0)
                 {
-                    CurrentFaceIndex = CurrentQueue.Dequeue();
+                    CurrentFaceIndex = CurrentQueue.RemoveFirst().Value;
                 }
 
                 if (CurrentFaceIndex < 0)
@@ -693,7 +693,8 @@ namespace ProceduralWorlds
                         {
                             if (Edge.Twin.Face.ID > -1)
                             {
-                                Frontiers[CurrentPlateIndex].Enqueue(Edge.Twin.Face.ID);
+                                int Rank = bIsRandomSearch ? Random.Range(0, MaxCells * 100) : ClosedList.Count;
+                                Frontiers[CurrentPlateIndex].Add(new Priority(Edge.Twin.Face.ID, Rank));
                                 ClosedList.Add(Edge.Twin.Face.ID);
                             }
                         }

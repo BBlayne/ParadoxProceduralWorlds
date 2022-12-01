@@ -6,6 +6,36 @@ using TriangleNet.Voronoi;
 using TMesh = TriangleNet.Mesh;
 using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
 using TFace = TriangleNet.Topology.DCEL.Face;
+using System;
+
+public class Priority : IHeapItem<Priority>
+{
+    public int Value;
+    public int Rank;
+    int MyHeapIndex;
+
+    public Priority(int InValue, int InRank) 
+    { 
+        Value = InValue;
+        Rank = InRank;
+    }
+    public int HeapIndex
+    {
+        get
+        {
+            return MyHeapIndex;
+        }
+        set
+        {
+            MyHeapIndex = value;
+        }
+    }
+
+    public int CompareTo(Priority InOtherPriority)
+    {
+        return -Rank.CompareTo(InOtherPriority.Rank);
+    }
+}
 
 public static class IListExtensions
 {
@@ -15,11 +45,133 @@ public static class IListExtensions
         while (n > 1)
         {
             n--;
-            int k = Random.Range(0, n + 1);
+            int k = UnityEngine.Random.Range(0, n + 1);
             T value = list[k];
             list[k] = list[n];
             list[n] = value;
         }
+    }
+}
+
+public class Heap<T> where T : IHeapItem<T>
+{
+
+    T[] items;
+    int currentItemCount;
+
+    public Heap(int maxHeapSize)
+    {
+        items = new T[maxHeapSize];
+    }
+
+    public void Add(T item)
+    {
+        item.HeapIndex = currentItemCount;
+        items[currentItemCount] = item;
+        SortUp(item);
+        currentItemCount++;
+    }
+
+    public T RemoveFirst()
+    {
+        T firstItem = items[0];
+        currentItemCount--;
+        items[0] = items[currentItemCount];
+        items[0].HeapIndex = 0;
+        SortDown(items[0]);
+        return firstItem;
+    }
+
+    public void UpdateItem(T item)
+    {
+        SortUp(item);
+    }
+
+    public int Count
+    {
+        get
+        {
+            return currentItemCount;
+        }
+    }
+
+    public bool Contains(T item)
+    {
+        return Equals(items[item.HeapIndex], item);
+    }
+
+    void SortDown(T item)
+    {
+        while (true)
+        {
+            int childIndexLeft = item.HeapIndex * 2 + 1;
+            int childIndexRight = item.HeapIndex * 2 + 2;
+            int swapIndex = 0;
+
+            if (childIndexLeft < currentItemCount)
+            {
+                swapIndex = childIndexLeft;
+
+                if (childIndexRight < currentItemCount)
+                {
+                    if (items[childIndexLeft].CompareTo(items[childIndexRight]) < 0)
+                    {
+                        swapIndex = childIndexRight;
+                    }
+                }
+
+                if (item.CompareTo(items[swapIndex]) < 0)
+                {
+                    Swap(item, items[swapIndex]);
+                }
+                else
+                {
+                    return;
+                }
+            }
+            else
+            {
+                return;
+            }
+        }
+    }
+
+    void SortUp(T item)
+    {
+        int parentIndex = (item.HeapIndex - 1) / 2;
+
+        while (true)
+        {
+            T parentItem = items[parentIndex];
+            if (item.CompareTo(parentItem) > 0)
+            {
+                Swap(item, parentItem);
+            }
+            else
+            {
+                break;
+            }
+
+            parentIndex = (item.HeapIndex - 1) / 2;
+        }
+    }
+
+    void Swap(T itemA, T itemB)
+    {
+        items[itemA.HeapIndex] = itemB;
+        items[itemB.HeapIndex] = itemA;
+        int itemAIndex = itemA.HeapIndex;
+        itemA.HeapIndex = itemB.HeapIndex;
+        itemB.HeapIndex = itemAIndex;
+    }
+}
+
+public interface IHeapItem<T> : IComparable<T>
+{
+    int HeapIndex
+    {
+        get;
+        set;
     }
 }
 
@@ -146,15 +298,15 @@ public static class MapUtils
 
         while (SpawnPoints.Count > 0 && OutPoints.Count < InMaxPoints)
         {
-            int SpawnIndex = Random.Range(0, SpawnPoints.Count);
+            int SpawnIndex = UnityEngine.Random.Range(0, SpawnPoints.Count);
             Vector3 SpawnCenter = SpawnPoints[SpawnIndex];
             bool bCandidateAccepted = false;
 
             for (int i = 0; i < numMaxSamples; i++)
             {
-                float Angle = Random.value * Mathf.PI * 2;
+                float Angle = UnityEngine.Random.value * Mathf.PI * 2;
                 Vector3 Direction = new Vector3(Mathf.Sin(Angle), Mathf.Cos(Angle), 0);
-                Vector3 Candidate = SpawnCenter + Direction * Random.Range(InRadius, 2 * InRadius);
+                Vector3 Candidate = SpawnCenter + Direction * UnityEngine.Random.Range(InRadius, 2 * InRadius);
                 if (IsValid(Candidate, InMapSizes, CellSize, InRadius, OutPoints, Grid, InPadding))
                 {
                     OutPoints.Add(Candidate);
@@ -184,8 +336,8 @@ public static class MapUtils
             (
                 new Vector3
                 (
-                    Random.Range(InPadding, InMapSizes.x - InPadding),
-                    Random.Range(InPadding, InMapSizes.y - InPadding),
+                    UnityEngine.Random.Range(InPadding, InMapSizes.x - InPadding),
+                    UnityEngine.Random.Range(InPadding, InMapSizes.y - InPadding),
                     0
                 )
             );
@@ -213,8 +365,8 @@ public static class MapUtils
         SpawnPoints.Add(
             new Vector3
             (
-                Mathf.CeilToInt(Random.Range(InPadding, InMapSizes.x - InPadding)),
-                Mathf.CeilToInt(Random.Range(InPadding, InMapSizes.y - InPadding)),
+                Mathf.CeilToInt(UnityEngine.Random.Range(InPadding, InMapSizes.x - InPadding)),
+                Mathf.CeilToInt(UnityEngine.Random.Range(InPadding, InMapSizes.y - InPadding)),
                 0
             )
         );
@@ -229,15 +381,15 @@ public static class MapUtils
 
         while (SpawnPoints.Count > 0 && OutPoints.Count < InMaxPoints)
         {
-            int SpawnIndex = Random.Range(0, SpawnPoints.Count);
+            int SpawnIndex = UnityEngine.Random.Range(0, SpawnPoints.Count);
             Vector3 SpawnCenter = SpawnPoints[SpawnIndex];
             bool bCandidateAccepted = false;
 
             for (int i = 0; i < numMaxSamples; i++)
             {
-                float Angle = Random.value * Mathf.PI * 2;
+                float Angle = UnityEngine.Random.value * Mathf.PI * 2;
                 Vector3 Direction = new Vector3(Mathf.Sin(Angle), Mathf.Cos(Angle), 0);
-                Vector3 Candidate = SpawnCenter + Direction * Random.Range(InRadius, 2 * InRadius);
+                Vector3 Candidate = SpawnCenter + Direction * UnityEngine.Random.Range(InRadius, 2 * InRadius);
                 if (IsValid(Candidate, InMapSizes, CellSize, InRadius, OutPoints, Grid, InPadding))
                 {
                     OutPoints.Add(Candidate);
