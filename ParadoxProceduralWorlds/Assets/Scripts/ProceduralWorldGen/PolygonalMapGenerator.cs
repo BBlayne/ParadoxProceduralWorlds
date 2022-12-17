@@ -585,12 +585,6 @@ namespace ProceduralWorlds
 
                 But the Frontier/Open List, each entity needs their own?
              */
-
-
-            /*
-             * Current problem is the flood fill isn't really "flood" filling, it seems to be skipping
-             * past some cells resulting in disjoint patches of coloured regions.
-             */
             Vector2Int Hues = new Vector2Int(30, 330);
             Vector2Int Saturation = new Vector2Int(99, 100);
             Vector2Int Brightness = new Vector2Int(99, 100);
@@ -775,6 +769,38 @@ namespace ProceduralWorlds
         private KDTree GetVoronoiSiteKDTree(List<Vector3> InVoronoiSiteCoords)
         {
             return new KDTree(InVoronoiSiteCoords.ToArray(), 32);
+        }
+
+        public void ContinentsFloodFill2D(BoundedVoronoi VorMap, List<int> InStartCells, List<int> InContinentInfo)
+        {
+            // What do we want:
+            // Array of indices 0...N per tile mapping to one of N continents.
+            // What we need:
+            // Array whose Length is the # of landmasses, and it's elements are the # of cells.
+            // Our Voronoi map.
+            Vector2Int Hues = new Vector2Int(30, 330);
+            Vector2Int Saturation = new Vector2Int(99, 100);
+            Vector2Int Brightness = new Vector2Int(99, 100);
+            List<Color> DebugColours = TextureGenerator.GenerateHSVColours(InStartCells.Count + 1, Hues, Saturation, Brightness);
+            DebugColours[0] = Color.black;
+
+            int MaxCells = VorMap.Faces.Count;
+            int NumPlates = InStartCells.Count;
+            HashSet<int> ClosedList = new HashSet<int>();
+            Heap<Priority>[] Frontiers = new Heap<Priority>[NumPlates];
+            int[] CellsToBeFilled = new int[MaxCells];
+
+            for (int i = 0; i < NumPlates; i++)
+            {
+                Frontiers[i] = new Heap<Priority>(MaxCells);
+                Frontiers[i].Add(new Priority(InStartCells[i], 0));
+                ClosedList.Add(InStartCells[i]);
+            }
+
+            int CurrentPlateIndex = 0;
+            int MinimumBlobSize = 4;
+            int MaxIterations = Mathf.RoundToInt(Mathf.Min(MaxCells, MinimumBlobSize * NumPlates));
+            int Iteration = 0;
         }
     }
 }
