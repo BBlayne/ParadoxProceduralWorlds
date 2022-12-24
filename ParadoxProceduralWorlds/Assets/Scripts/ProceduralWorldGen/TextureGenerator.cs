@@ -219,13 +219,13 @@ public static class TextureGenerator
         return outRTex;
     }
 
-    public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe)
+    public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe, bool bIsTransparentBG)
     {
         RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
 
         Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
         {
-            GL.Clear(true, true, Color.black);
+            GL.Clear(true, true, bIsTransparentBG ? Color.clear : Color.black);
             if (InWireframe)
             {
                 GL.wireframe = true;
@@ -256,6 +256,33 @@ public static class TextureGenerator
         GL.wireframe = false;
 
         return outRTex;
+    }
+
+    public static RenderTexture DrawTextureOutline(Texture InTex)
+    {
+        RenderTexture OutRTex = new RenderTexture(InTex.width, InTex.height, 0);
+        OutRTex.enableRandomWrite = true;
+        OutRTex.Create();
+
+        // Shader Stuff
+        ComputeShader Shader = Resources.Load(shaderPath) as ComputeShader;
+        if (Shader == null)
+        {
+            Debug.LogError(noShaderMsg);
+            return null;
+        }        
+
+        int Kernel = Shader.FindKernel("DrawTextureOutline");
+
+        // Set Variables/Uniforms
+        int[] resInts = { InTex.width, InTex.height };
+        Shader.SetInts("TexDims", resInts);
+        Shader.SetTexture(Kernel, "OutlineTexInput", InTex);
+        Shader.SetTexture(Kernel, "OutlineTexOutput", OutRTex);
+
+        Shader.Dispatch(Kernel, Mathf.CeilToInt(InTex.width / 16f), Mathf.CeilToInt(InTex.height / 16f), 1);
+
+        return OutRTex;
     }
 
     public static RenderTexture DrawDalaunayMap(UnityEngine.Mesh InMesh, int InMapWidth, int InMapHeight)
@@ -647,6 +674,78 @@ public static class TextureGenerator
         }
     }
 
+    // The First Texture of InTextures is the one all the textures are being merged into
+    // It is the "Bottom" of the texture stack.
+    public static Texture2D MergeTextures(params Texture[] InTextures)
+    {
+        if (InTextures == null || InTextures.Length == 0)
+        {
+            return null;
+        }
+
+        int oldQuality = QualitySettings.GetQualityLevel();
+        QualitySettings.SetQualityLevel(5);
+
+        RenderTexture RenderTex = RenderTexture.GetTemporary(
+            InTextures[0].width,
+            InTextures[0].height,
+            0,
+            RenderTextureFormat.Default,
+            RenderTextureReadWrite.Linear
+        );
+
+        Graphics.Blit(InTextures[0], RenderTex);
+        RenderTexture Previous = RenderTexture.active;
+        RenderTexture.active = RenderTex;
+        GL.PushMatrix();
+        GL.LoadPixelMatrix(0, InTextures[0].width, InTextures[0].height, 0);
+        for (int i = 1; i < InTextures.Length; i++)
+        {
+            Graphics.DrawTexture(new Rect(0, 0, InTextures[0].width, InTextures[0].height), InTextures[i]);
+        }            
+        GL.PopMatrix();
+
+        Texture2D OutTex = new Texture2D(InTextures[0].width, InTextures[0].height, TextureFormat.RGBA32, false);
+        OutTex.ReadPixels(new Rect(0, 0, RenderTex.width, RenderTex.height), 0, 0);
+        OutTex.filterMode = FilterMode.Point;
+        OutTex.wrapMode = TextureWrapMode.Clamp;
+        OutTex.Apply();
+        RenderTexture.active = Previous;
+        RenderTexture.ReleaseTemporary(RenderTex);
+        QualitySettings.SetQualityLevel(oldQuality);
+
+        return OutTex;
+    }
+
+    public static Texture2D OverlayTwoTextures(RenderTexture InSrcA, RenderTexture InSrcB)
+    {
+        RenderTexture RenderTex = RenderTexture.GetTemporary(
+            InSrcB.width,
+            InSrcB.height,
+            0,
+            RenderTextureFormat.Default,
+            RenderTextureReadWrite.Linear
+        );
+
+        Graphics.Blit(InSrcB, RenderTex);
+        RenderTexture Previous = RenderTexture.active;
+        RenderTexture.active = RenderTex;
+        GL.PushMatrix();
+        GL.LoadPixelMatrix(0, InSrcB.width, InSrcB.height, 0);
+        // Add Loop Here Later
+        Graphics.DrawTexture(new Rect(0, 0, InSrcB.width, InSrcB.height), InSrcA);
+        GL.PopMatrix();
+
+        Texture2D OutTex = new Texture2D(InSrcB.width, InSrcB.height, TextureFormat.RGBA32, false);
+        OutTex.ReadPixels(new Rect(0, 0, InSrcA.width, InSrcA.height), 0, 0);
+        OutTex.filterMode = FilterMode.Point;
+        OutTex.wrapMode = TextureWrapMode.Clamp;
+        OutTex.Apply();
+        RenderTexture.active = Previous;
+
+        return OutTex;
+    }
+
     public static Texture2D CreateTexture2D(RenderTexture InRTX, int InWidth, int InHeight)
     {
         Texture2D texture = new Texture2D(InWidth, InHeight, TextureFormat.RGBA32, false);
@@ -831,6 +930,27 @@ public static class TextureGenerator
         }
 
         return temp;
+    }
+
+    public static Texture2D GenerateContinentalTextureMap(int InNuMCells, int[] InCellByID, List<Color> InColours)
+    {
+        Texture2D OutTex = new Texture2D(InNuMCells, 1, TextureFormat.RGBA32, false);
+        OutTex.filterMode = FilterMode.Point;
+        OutTex.wrapMode = TextureWrapMode.Clamp;
+
+        List<Color> CellColours = new List<Color>();
+
+        for (int i = 0; i < InNuMCells; i++)
+        {
+            CellColours.Add(InColours[InCellByID[i]]);
+        }
+
+        OutTex.SetPixels(CellColours.ToArray());
+        OutTex.Apply();
+
+        SaveMapAsPNG("ContinentalTextureMap", OutTex);
+
+        return OutTex;
     }
 
     public static Texture2D GenerateTectonicPlateTextureMap(int InNuMCells, int[] InCellByID, List<Color> InColours)

@@ -47,6 +47,7 @@ public class WorldGenerator : MonoBehaviour
     private RenderTexture _heightMap = null;
     private RenderTexture _silhouetteMap = null;
     private RenderTexture PolyMapRT = null;
+    private RenderTexture ContinentMapRT = null;
 
     private UnityEngine.Mesh TestMesh = null;
 
@@ -153,6 +154,15 @@ public class WorldGenerator : MonoBehaviour
             bIsRandomFloodFill
         );
 
+        EPlateDirections[] PlateDirections = new EPlateDirections[NumTectonicPlates];
+        int NumDirections = (int)EPlateDirections.NUM_DIRECTIONS;
+        for (int i = 0; i < NumTectonicPlates; i++)
+        {
+            int Direction = Random.Range(0, NumDirections);
+            EPlateDirections PlateDirection = (EPlateDirections)Direction;
+            PlateDirections[i] = PlateDirection;
+        }
+
         Vector2Int Hues = new Vector2Int(30, 330);
         Vector2Int Saturation = new Vector2Int(99, 100);
         Vector2Int Brightness = new Vector2Int(99, 100);
@@ -164,8 +174,43 @@ public class WorldGenerator : MonoBehaviour
 
         Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(TotalNumberVorCells, VoronoiTectonicCells, PlateColours);
         PolyMapRT = PolyMapGen.RenderPolygonalMap(WorldMapMesh, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());
+        RenderTexture OutlineTest = TextureGenerator.DrawTextureOutline(PolyMapRT);
+        SaveMapAsPNG("PlateOutlineTexMap", OutlineTest);
+        SaveMapAsPNG("PlateTexMap", PolyMapRT);
 
-        UpdateMapDisplay(PolyMapRT, WorldSizes);
+        Mesh ArrowMesh = PolyMapGen.GenerateTectonicPlateCellArrows(PolyMapGen.Vor, VoronoiTectonicCells, PlateDirections);
+        RenderTexture ArrowRT = PolyMapGen.RenderArrows(ArrowMesh);
+
+        SaveMapAsPNG("ArrowTexMap", ArrowRT);
+
+        //UpdateMapDisplay(PolyMapRT, WorldSizes);
+
+
+
+        int[] VoronoiContinentCells = GenerateContinents
+        (
+            PolyMapGen.Vor,
+            WorldSizes,
+            3,
+            MapPadding,
+            0.3f
+        );
+
+        List<Color> ContinentColours = TextureGenerator.GenerateHSVColours(3 + 1, Hues, Saturation, Brightness);
+        ContinentColours[0] = Color.black;
+
+        Texture2D ContinentTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(TotalNumberVorCells, VoronoiContinentCells, ContinentColours);
+        ContinentMapRT = PolyMapGen.RenderPolygonalMap(WorldMapMesh, ContinentTexMap, TextureGenerator.GetUnlitTextureMaterial());
+
+        SaveMapAsPNG("ContinentTexMap", ContinentMapRT);
+        UpdateMapDisplay(ContinentMapRT, WorldSizes);
+
+        List<Texture> TexturesToMerge = new List<Texture>();
+        TexturesToMerge.Add(ContinentMapRT);
+        TexturesToMerge.Add(ArrowRT);
+        TexturesToMerge.Add(OutlineTest);
+        Texture2D OverlayedMapTex = TextureGenerator.MergeTextures(TexturesToMerge.ToArray());
+        SaveMapAsPNG("OverlayedMapTex", OverlayedMapTex);
     }
 
     private List<Vector3> PickPoissonRandomPoints(Vector2Int InWorldSizes, int InNumPoints, int InPadding, int InRadius)
@@ -238,19 +283,48 @@ public class WorldGenerator : MonoBehaviour
 
 
 
-    private void GenerateContinents(BoundedVoronoi InVor, Vector2Int InWorldSizes, int InNumContinents, int InPadding, float LandWaterRatio)
+    private int[] GenerateContinents(BoundedVoronoi InVor, Vector2Int InWorldSizes, int InNumContinents, int InPadding, float LandWaterRatio)
     {
         // Initial Continents are generated semi-randomly similar to plates, but instead of random flood-filling
         // until the entire map is filled, we halt for each continent once its reached a specified number of cells.
         // As such, given a total number of cells, we derive the amount of land cells from the ratio. i.e 30% Land vs 70% Water.
         int TotalLandCellCount = Mathf.RoundToInt(LandWaterRatio * InVor.Faces.Count);
+        int TotalWaterCellCount = InVor.Faces.Count - TotalLandCellCount;
 
         List<Vector3> ContinentPointCenters = GenerateTectonicPlateSeedPoints(InWorldSizes, InPadding, InNumContinents);
 
-        for (int i = 0; i < ContinentPointCenters.Count; i++)
+        float SplitFactor = 0.6f;
+        // N Continents with X - % of the Land Area
+        // Two Continents: 60% to 40%
+        // Three Continents 60 25% 16% 
+        List<ContinentInfo> ContinentInfos = new List<ContinentInfo>();
+        int RemainingCells = TotalLandCellCount;
+        for (int i = 0; i < InNumContinents; i++)
         {
-
+            ContinentInfo CurrentContintentInfo = new ContinentInfo();
+            CurrentContintentInfo.NumCells = 1;
+            RemainingCells--;
+            ContinentInfos.Add(CurrentContintentInfo);
         }
+
+        for (int i = 0; i < InNumContinents; i++)
+        {
+            if (RemainingCells > 0)
+            {
+                ContinentInfo CurrentContinentInfo = ContinentInfos[i];
+                CurrentContinentInfo.NumCells = Mathf.RoundToInt(RemainingCells * SplitFactor) + ContinentInfos[i].NumCells;                
+                ContinentInfos[i] = CurrentContinentInfo;
+                RemainingCells = RemainingCells - CurrentContinentInfo.NumCells;
+            }
+        }
+
+        ContinentInfo FirstContinentInfo = ContinentInfos[0];
+        FirstContinentInfo.NumCells += RemainingCells; // assign remaining cells to largest continent
+        ContinentInfos[0] = FirstContinentInfo;
+
+        List<int> ContinentCentersFaceIndices = PolyMapGen.GetCellIDsFromCoordinates(InVor, ContinentPointCenters);
+
+        return PolyMapGen.ContinentsFloodFill2D(InVor, ContinentCentersFaceIndices, ContinentInfos);
     }
 
     private void UpdateMapDisplay(RenderTexture InMapRtx, Vector2Int InWorldSizes)

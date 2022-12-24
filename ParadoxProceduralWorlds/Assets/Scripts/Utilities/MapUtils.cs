@@ -6,7 +6,39 @@ using TriangleNet.Voronoi;
 using TMesh = TriangleNet.Mesh;
 using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
 using TFace = TriangleNet.Topology.DCEL.Face;
+using TPoint = TriangleNet.Geometry.Point;
 using System;
+
+public class PriorityVCell : IHeapItem<PriorityVCell>
+{
+    public int CellIndex;
+    public int CellParentIndex;
+    public int Rank;
+    int MyHeapIndex;
+
+    public PriorityVCell(int InIndex, int InParentIndex, int InRank)
+    {
+        CellIndex = InIndex;
+        CellParentIndex = InParentIndex;
+        Rank = InRank;
+    }
+    public int HeapIndex
+    {
+        get
+        {
+            return MyHeapIndex;
+        }
+        set
+        {
+            MyHeapIndex = value;
+        }
+    }
+
+    public int CompareTo(PriorityVCell InOther)
+    {
+        return -Rank.CompareTo(InOther.Rank);
+    }
+}
 
 public class Priority : IHeapItem<Priority>
 {
@@ -36,6 +68,15 @@ public class Priority : IHeapItem<Priority>
         return -Rank.CompareTo(InOtherPriority.Rank);
     }
 }
+
+public static class TriangleNetUtility
+{
+    public static Vector3 PointToVector3(TPoint InPoint)
+    {
+        return new Vector3((float)InPoint.X, (float)InPoint.Y, 0);
+    }
+}
+
 
 public static class IListExtensions
 {

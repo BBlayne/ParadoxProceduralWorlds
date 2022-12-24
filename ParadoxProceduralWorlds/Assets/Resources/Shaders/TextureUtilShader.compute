@@ -363,3 +363,58 @@ void DrawDelaunayTexture(uint3 id : SV_DispatchThreadID)
 
     DelaunayTexOutput[id.xy] = pxColour;
 }
+
+float LUM(float3 c)
+{
+    return c.r * .3 + c.g * .59 + c.b * .11;
+}
+
+#pragma kernel DrawTextureOutline
+
+uniform uint2 TexDims;
+
+RWTexture2D<float4> OutlineTexOutput;
+Texture2D<float4> OutlineTexInput;
+
+[numthreads(16, 16, 1)]
+void DrawTextureOutline(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= TexDims.x || id.y >= TexDims.y || id.x == 0 || id.y == 0)
+    {
+        return;
+    }
+
+    float4 pxColour = float4(0, 0, 0, 0); // black by default
+
+    float3 pxCenter = OutlineTexInput[id.xy];
+    float3 pxNorth = OutlineTexInput[id.xy + uint2(0, 1)];
+    float3 pxNorthEast = OutlineTexInput[id.xy + uint2(1, 1)];
+    float3 pxEast = OutlineTexInput[id.xy + uint2(1, 0)];
+    float3 pxSouthEast = OutlineTexInput[id.xy + uint2(1, -1)];
+    float3 pxSouth = OutlineTexInput[id.xy + uint2(0, -1)];    
+    float3 pxSouthWest = OutlineTexInput[id.xy + uint2(-1, -1)];
+    float3 pxWest = OutlineTexInput[id.xy + uint2(-1, 0)];
+    float3 pxNorthWest = OutlineTexInput[id.xy + uint2(-1, 1)];
+    
+
+    // Luminosity
+    float C_lum = LUM(pxCenter);
+    float N_lum = LUM(pxNorth);
+    float S_lum = LUM(pxSouth);
+    float W_lum = LUM(pxWest);
+    float E_lum = LUM(pxEast);
+
+    float NE_lum = LUM(pxNorthEast);
+    float SE_lum = LUM(pxSouthEast);
+    float SW_lum = LUM(pxSouthWest);
+    float NW_lum = LUM(pxNorthWest);
+
+    // Laplacian
+    float L_lum = clamp(N_lum + S_lum + W_lum + E_lum + NE_lum + SE_lum + SW_lum + NW_lum - 8 * C_lum, 0, 1);
+    if (L_lum >= 0.025f)
+    {
+        pxColour = float4(1, 1, 1, 1);
+    }
+
+    OutlineTexOutput[id.xy] = pxColour;
+}

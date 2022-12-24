@@ -149,7 +149,99 @@ namespace ProceduralWorlds
             }
         }
 
-        public Mesh GeneratePolygonalMapMesh()
+        public Mesh GetArrowMesh(float InStemWidth, float InTipWidth, float InTipLength, float InStemLength)
+        {
+            // setup
+            List<Vector3> VerticeList = new List<Vector3>();
+            List<int> TriangleList = new List<int>();
+
+            Mesh Arrow = new Mesh();
+
+            // Stem Setup
+            Vector3 StemOrigin = Vector3.zero;
+            float StemHalfWidth = InStemWidth / 2;
+
+            // Stem Points
+            VerticeList.Add(StemOrigin + (StemHalfWidth * Vector3.down));
+            VerticeList.Add(StemOrigin + (StemHalfWidth * Vector3.up));
+            VerticeList.Add(VerticeList[0] + (InStemLength * Vector3.right));
+            VerticeList.Add(VerticeList[1] + (InStemLength * Vector3.right));
+
+            // Stem Triangles
+            TriangleList.Add(0);
+            TriangleList.Add(1);
+            TriangleList.Add(3);
+
+            TriangleList.Add(0);
+            TriangleList.Add(3);
+            TriangleList.Add(2);
+
+            // Tip setup
+            Vector3 TipOrigin = InStemLength * Vector3.right;
+            float TipHalfWidth = InTipWidth / 2;
+
+            // Tip Points
+            VerticeList.Add(TipOrigin + (TipHalfWidth * Vector3.up));
+            VerticeList.Add(TipOrigin + (TipHalfWidth * Vector3.down));
+            VerticeList.Add(TipOrigin + (InTipLength * Vector3.right));
+
+            // tip triangle
+            TriangleList.Add(4);
+            TriangleList.Add(6);
+            TriangleList.Add(5);
+
+            Arrow.vertices = VerticeList.ToArray();
+            Arrow.triangles = TriangleList.ToArray();
+
+            return Arrow;
+        }
+
+        public Mesh GenerateTectonicPlateCellArrows(BoundedVoronoi InVor, int[] InTectonicPlateCellIndices, EPlateDirections[] InDirections)
+        {
+            Mesh CombinedArrowMesh = new Mesh();
+
+            CombineInstance[] CombineInstances = new CombineInstance[InVor.Faces.Count];
+            for (int i = 0; i < InVor.Faces.Count; i++)
+            {
+                CombineInstances[i].mesh = GetArrowMesh(2.5f, 8, 5, 5);
+                EPlateDirections CellDirection = InDirections[InTectonicPlateCellIndices[i] - 1];
+                Quaternion ArrowRotation = Quaternion.identity;
+                Vector3 CellPosition = TriangleNetUtility.PointToVector3(InVor.Faces[i].generator);
+                switch (CellDirection)
+                {
+                case EPlateDirections.NORTH:
+                    ArrowRotation = Quaternion.AngleAxis(90, Vector3.forward);
+                    break;
+                case EPlateDirections.NORTHEAST:
+                    ArrowRotation = Quaternion.AngleAxis(45, Vector3.forward);
+                    break;
+                case EPlateDirections.EAST:
+                    ArrowRotation = Quaternion.AngleAxis(0, Vector3.forward);
+                    break;
+                case EPlateDirections.SOUTHEAST:
+                    ArrowRotation = Quaternion.AngleAxis(315, Vector3.forward);                    
+                    break;
+                case EPlateDirections.SOUTH:
+                    ArrowRotation = Quaternion.AngleAxis(270, Vector3.forward);
+                    break;
+                case EPlateDirections.SOUTHWEST:
+                    ArrowRotation = Quaternion.AngleAxis(225, Vector3.forward);
+                    break;
+                case EPlateDirections.WEST:
+                    ArrowRotation = Quaternion.AngleAxis(180, Vector3.forward);                    
+                    break;
+                case EPlateDirections.NORTHWEST:
+                    ArrowRotation = Quaternion.AngleAxis(135, Vector3.forward);
+                    break;
+                }
+                CombineInstances[i].transform = Matrix4x4.TRS(CellPosition, ArrowRotation, Vector3.one);
+            }
+            CombinedArrowMesh.CombineMeshes(CombineInstances);
+
+            return CombinedArrowMesh;
+        }
+
+        public Mesh GeneratePolygonalMapMesh() 
         {
             GenerateSiteDistribution();
             TMesh Triangulation = GenerateDelaunayTriangulation(InitialSites, 2);
@@ -535,6 +627,23 @@ namespace ProceduralWorlds
             }
         }
 
+        // Might have this have a mode passed in for Solid vs Wireframe...
+        public RenderTexture RenderArrows(Mesh InMapMesh)
+        {
+            RenderTexture ArrowMapRT = null;
+            Material MeshMaterial = TextureGenerator.GetUnlitMaterial();
+            if (MeshMaterial != null)
+            {
+                ArrowMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, MeshMaterial, false, true);
+                if (bSaveDebugMaps)
+                {
+                    TextureGenerator.SaveMapAsPNG("RenderArrowMapTest", ArrowMapRT);
+                }
+            }
+
+            return ArrowMapRT;
+        }
+
         public RenderTexture RenderPolygonalMap(Mesh InMapMesh, Texture2D InTexture, Material InMeshMaterial)
         {
             RenderTexture PolyMapRT = null;
@@ -542,7 +651,7 @@ namespace ProceduralWorlds
             {
                 PolyMapRT = new RenderTexture(MapDimensions.x, MapDimensions.y, 0);
                 InMeshMaterial.mainTexture = InTexture;
-                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false);
+                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false, false);
                 if (bSaveDebugMaps)
                 {
                     TextureGenerator.SaveMapAsPNG("RenderPolygonalMapTest", PolyMapRT);
@@ -559,7 +668,7 @@ namespace ProceduralWorlds
             {
                 PolyMapRT = new RenderTexture(MapDimensions.x, MapDimensions.y, 0);
                 InMeshMaterial.mainTexture = InTexture;
-                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false);
+                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false, false);
                 if (bSaveDebugMaps)
                 {
                     TextureGenerator.SaveMapAsPNG(InName, PolyMapRT);
@@ -568,7 +677,6 @@ namespace ProceduralWorlds
 
             return PolyMapRT;
         }
-
 
         public int[] TectonicPlatesFloodFill2D(BoundedVoronoi VorMap, List<int> InStartCells, bool bIsRandomSearch = false)
         {
@@ -771,8 +879,9 @@ namespace ProceduralWorlds
             return new KDTree(InVoronoiSiteCoords.ToArray(), 32);
         }
 
-        public void ContinentsFloodFill2D(BoundedVoronoi VorMap, List<int> InStartCells, List<int> InContinentInfo)
+        public int[] ContinentsFloodFill2D(BoundedVoronoi VorMap, List<int> InStartCells, List<ContinentInfo> InContinentInfo)
         {
+            int DebugIterationStep = 2;
             // What do we want:
             // Array of indices 0...N per tile mapping to one of N continents.
             // What we need:
@@ -785,22 +894,90 @@ namespace ProceduralWorlds
             DebugColours[0] = Color.black;
 
             int MaxCells = VorMap.Faces.Count;
-            int NumPlates = InStartCells.Count;
+            int NumContinents = InStartCells.Count;
             HashSet<int> ClosedList = new HashSet<int>();
-            Heap<Priority>[] Frontiers = new Heap<Priority>[NumPlates];
+            Heap<PriorityVCell> Frontier = new Heap<PriorityVCell>(MaxCells);
             int[] CellsToBeFilled = new int[MaxCells];
+            int[] ContinentCellCounter = new int[NumContinents];
 
-            for (int i = 0; i < NumPlates; i++)
+            for (int i = 0; i < NumContinents; i++)
             {
-                Frontiers[i] = new Heap<Priority>(MaxCells);
-                Frontiers[i].Add(new Priority(InStartCells[i], 0));
+                Frontier.Add(new PriorityVCell(InStartCells[i], InStartCells[i], i));                
+                CellsToBeFilled[InStartCells[i]] = i + 1;
                 ClosedList.Add(InStartCells[i]);
+                ContinentCellCounter[i] = 1;
             }
 
-            int CurrentPlateIndex = 0;
-            int MinimumBlobSize = 4;
-            int MaxIterations = Mathf.RoundToInt(Mathf.Min(MaxCells, MinimumBlobSize * NumPlates));
+            //int MinimumBlobSize = 4;
+            //int MaxIterations = Mathf.RoundToInt(Mathf.Min(MaxCells, MinimumBlobSize * NumContinents));
             int Iteration = 0;
+
+            while (Frontier.Count > 0)
+            {
+                PriorityVCell CurrentCell = Frontier.RemoveFirst();
+                if (CurrentCell == null)
+                {
+                    continue;
+                }
+
+                int CurrentFaceIndex = CurrentCell.CellIndex;
+                int CurrentContinentID = CellsToBeFilled[CurrentCell.CellParentIndex];
+                // In case we have fake faces inserted by our voronoi library
+                // We'll keep popping until we have another valid one.
+                while (CurrentFaceIndex < 0)
+                {
+                    PriorityVCell PoppedCell = Frontier.RemoveFirst();
+                    if (PoppedCell != null)
+                    {
+                        CurrentFaceIndex = PoppedCell.CellIndex;
+                    }                    
+                }
+
+                CellsToBeFilled[CurrentFaceIndex] = CurrentContinentID;                
+
+                // Iterate through all of the adjacent faces to the current voronoi cell face
+                TFace Face = VorMap.Faces[CurrentFaceIndex];
+                List<THalfEdge> Edges = Face.EnumerateEdges().ToList();
+                foreach (var Edge in Edges)
+                {
+                    // If the current continent has reached its target number of cells
+                    ContinentInfo CurrentContinentInfo = InContinentInfo[CurrentContinentID - 1];
+                    if (ContinentCellCounter[CurrentContinentID - 1] >= CurrentContinentInfo.NumCells)
+                    {
+                        break;
+                    }
+
+                    if (Edge.Twin != null && Edge.Twin.Face != null && Edge.Twin.Face != Face)
+                    {
+                        if (!ClosedList.Contains(Edge.Twin.Face.ID))
+                        {
+                            if (Edge.Twin.Face.ID > -1)
+                            {
+                                int Rank = Random.Range(0, int.MaxValue);
+                                Frontier.Add(new PriorityVCell(Edge.Twin.Face.ID, CurrentFaceIndex, Rank));
+                                ClosedList.Add(Edge.Twin.Face.ID);
+                                ContinentCellCounter[CurrentContinentID - 1]++;
+                            }
+                        }
+                    }
+                }
+
+                // Debug Images
+                if (bSaveDebugIncrementalFloodFillMaps && (Iteration % DebugIterationStep == 0))
+                {
+                    if (CombinedVoronoiMesh != null)
+                    {
+                        RenderPolygonalMap("DebugContinents" + Iteration, CombinedVoronoiMesh,
+                            TextureGenerator.GenerateContinentalTextureMap(MaxCells, CellsToBeFilled, DebugColours),
+                            TextureGenerator.GetUnlitTextureMaterial()
+                        );
+                    }
+                }
+
+                Iteration++;
+            }
+
+            return CellsToBeFilled;
         }
     }
 }

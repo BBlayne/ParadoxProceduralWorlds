@@ -2,6 +2,24 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+public struct ContinentInfo
+{
+    public int NumCells;
+}
+
+public enum EPlateDirections
+{
+    NORTH = 0,
+    NORTHEAST,
+    EAST,
+    SOUTHEAST,
+    SOUTH,
+    SOUTHWEST,
+    WEST,
+    NORTHWEST,
+    NUM_DIRECTIONS
+}
+
 public struct Region
 {
     public int RegionID;
