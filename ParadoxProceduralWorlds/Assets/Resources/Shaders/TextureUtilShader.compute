@@ -108,6 +108,11 @@ bool IsPixelOnLine(float2 A, float2 B, int2 C)
     }
 }
 
+float LUM(float3 c)
+{
+    return c.r * .3 + c.g * .59 + c.b * .11;
+}
+
 
 [numthreads(16, 16, 1)]
 void ColourTexture(uint3 id : SV_DispatchThreadID)
@@ -364,11 +369,6 @@ void DrawDelaunayTexture(uint3 id : SV_DispatchThreadID)
     DelaunayTexOutput[id.xy] = pxColour;
 }
 
-float LUM(float3 c)
-{
-    return c.r * .3 + c.g * .59 + c.b * .11;
-}
-
 #pragma kernel DrawTextureOutline
 
 uniform uint2 TexDims;
@@ -387,14 +387,14 @@ void DrawTextureOutline(uint3 id : SV_DispatchThreadID)
     float4 pxColour = float4(0, 0, 0, 0); // black by default
 
     float3 pxCenter = OutlineTexInput[id.xy];
-    float3 pxNorth = OutlineTexInput[id.xy + uint2(0, 1)];
-    float3 pxNorthEast = OutlineTexInput[id.xy + uint2(1, 1)];
-    float3 pxEast = OutlineTexInput[id.xy + uint2(1, 0)];
-    float3 pxSouthEast = OutlineTexInput[id.xy + uint2(1, -1)];
-    float3 pxSouth = OutlineTexInput[id.xy + uint2(0, -1)];    
-    float3 pxSouthWest = OutlineTexInput[id.xy + uint2(-1, -1)];
-    float3 pxWest = OutlineTexInput[id.xy + uint2(-1, 0)];
-    float3 pxNorthWest = OutlineTexInput[id.xy + uint2(-1, 1)];
+    float3 pxNorth = OutlineTexInput[id.xy + int2(0, 1)];
+    float3 pxNorthEast = OutlineTexInput[id.xy + int2(1, 1)];
+    float3 pxEast = OutlineTexInput[id.xy + int2(1, 0)];
+    float3 pxSouthEast = OutlineTexInput[id.xy + int2(1, -1)];
+    float3 pxSouth = OutlineTexInput[id.xy + int2(0, -1)];    
+    float3 pxSouthWest = OutlineTexInput[id.xy + int2(-1, -1)];
+    float3 pxWest = OutlineTexInput[id.xy + int2(-1, 0)];
+    float3 pxNorthWest = OutlineTexInput[id.xy + int2(-1, 1)];
     
 
     // Luminosity
@@ -411,10 +411,86 @@ void DrawTextureOutline(uint3 id : SV_DispatchThreadID)
 
     // Laplacian
     float L_lum = clamp(N_lum + S_lum + W_lum + E_lum + NE_lum + SE_lum + SW_lum + NW_lum - 8 * C_lum, 0, 1);
-    if (L_lum >= 0.025f)
+    if (L_lum > 0.005f)
     {
         pxColour = float4(1, 1, 1, 1);
     }
 
     OutlineTexOutput[id.xy] = pxColour;
+}
+
+#pragma kernel ThickenLineTexture
+
+uniform uint2 ThickenLineTextureInputDims;
+
+RWTexture2D<float4> ThickenLnTexOutput;
+Texture2D<float4> ThickenLnTexInput;
+
+[numthreads(16, 16, 1)]
+void ThickenLineTexture(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x > ThickenLineTextureInputDims.x || id.y > ThickenLineTextureInputDims.y)
+    {
+        return;
+    }
+
+    float4 pxColour = float4(0, 0, 0, 0); // black by default
+
+    int2 CenterCoord = id.xy;
+    int2 CurrentCoord = int2(0, 0);
+
+    int2 North = int2(0, 1);
+    int2 East = int2(1, 0);
+    int2 South = int2(0, -1);
+    int2 West = int2(-1, 0);
+
+    float4 pxCenter = OutlineTexInput[CenterCoord];
+
+    float4 pxNorth = float4(0, 0, 0, 0);
+    CurrentCoord = CenterCoord + North;
+    if (CurrentCoord.y < ThickenLineTextureInputDims.y)
+    {
+        pxNorth = OutlineTexInput[CurrentCoord];
+    }
+
+    float4 pxEast = float4(0, 0, 0, 0);
+    CurrentCoord = CenterCoord + East;
+    if (CurrentCoord.x < ThickenLineTextureInputDims.x)
+    {
+        pxEast = OutlineTexInput[CurrentCoord];
+    }
+
+    float4 pxWest = float4(0, 0, 0, 0);
+    CurrentCoord = CenterCoord + West;
+    if (CurrentCoord.x >= 0)
+    {
+        pxWest = OutlineTexInput[CurrentCoord];
+    }
+
+    float4 pxSouth = float4(0, 0, 0, 0);
+    CurrentCoord = CenterCoord + South;
+    if (CurrentCoord.y >= 0)
+    {
+        pxSouth = OutlineTexInput[CurrentCoord];
+    }
+
+    float C_lum = LUM(pxCenter);
+    float N_lum = LUM(pxNorth);
+    float S_lum = LUM(pxSouth);
+    float W_lum = LUM(pxWest);
+    float E_lum = LUM(pxEast);
+
+    // float L_lum = clamp(N_lum + S_lum + W_lum + E_lum + C_lum, 0, 1);
+    //float L_lum = saturate(N_lum + S_lum + W_lum + E_lum + C_lum);
+    //float L_lum = (N_lum + S_lum + W_lum + E_lum + C_lum);
+    //if (L_lum > 0.01f)
+    //{
+    ///    pxColour = float4(1, 0, 0, 1);
+    //}
+    //else
+    //{
+    ///    pxColour = float4(1, 0, 0, 1);
+    //}
+
+    ThickenLnTexOutput[id.xy] = float4(1.0f, 1.0f, 1.0f, 1.0f);
 }

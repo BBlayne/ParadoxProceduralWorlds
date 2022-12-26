@@ -628,12 +628,13 @@ namespace ProceduralWorlds
         }
 
         // Might have this have a mode passed in for Solid vs Wireframe...
-        public RenderTexture RenderArrows(Mesh InMapMesh)
+        public RenderTexture RenderArrows(Mesh InMapMesh, Color InArrowColour)
         {
             RenderTexture ArrowMapRT = null;
             Material MeshMaterial = TextureGenerator.GetUnlitMaterial();
             if (MeshMaterial != null)
             {
+                MeshMaterial.SetColor("_Color", InArrowColour);
                 ArrowMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, MeshMaterial, false, true);
                 if (bSaveDebugMaps)
                 {
@@ -644,13 +645,39 @@ namespace ProceduralWorlds
             return ArrowMapRT;
         }
 
+        public RenderTexture RenderPolygonalWireframeMap(Mesh InMapMesh, Texture2D InTexture, Material InMeshMaterial, Color InColour, bool isBGTransparent = true)
+        {
+            RenderTexture PolyMapRT = null;
+            if (InMeshMaterial != null)
+            {
+                InMeshMaterial.SetColor("_Color", InColour);
+                PolyMapRT = new RenderTexture(MapDimensions.x, MapDimensions.y, 0);
+                if (InTexture != null)
+                {
+                    InMeshMaterial.mainTexture = InTexture;
+                }
+
+                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, true, isBGTransparent);
+                if (bSaveDebugMaps)
+                {
+                    TextureGenerator.SaveMapAsPNG("RenderPolygonalMapTest", PolyMapRT);
+                }
+            }
+
+            return PolyMapRT;
+        }
+
         public RenderTexture RenderPolygonalMap(Mesh InMapMesh, Texture2D InTexture, Material InMeshMaterial)
         {
             RenderTexture PolyMapRT = null;
-            if (InTexture != null && InMeshMaterial != null)
+            if (InMeshMaterial != null)
             {
                 PolyMapRT = new RenderTexture(MapDimensions.x, MapDimensions.y, 0);
-                InMeshMaterial.mainTexture = InTexture;
+                if (InTexture != null)
+                {
+                    InMeshMaterial.mainTexture = InTexture;
+                }
+                
                 PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false, false);
                 if (bSaveDebugMaps)
                 {

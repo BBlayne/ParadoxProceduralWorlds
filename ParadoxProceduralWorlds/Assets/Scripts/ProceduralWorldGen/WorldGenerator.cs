@@ -144,6 +144,9 @@ public class WorldGenerator : MonoBehaviour
         Mesh WorldMapMesh = PolyMapGen.GeneratePolygonalMapMesh();
         int TotalNumberVorCells = PolyMapGen.Vor.Faces.Count;
 
+        RenderTexture VorRTex = PolyMapGen.RenderPolygonalWireframeMap(WorldMapMesh, null, TextureGenerator.GetUnlitMaterial(), Color.white);
+        SaveMapAsPNG("VorRTex", VorRTex);
+
         //int PoissonPlatesRadius = 256; // relative to pixel dimensions of our target texture for rendering
         int[] VoronoiTectonicCells = GenerateTectonicPlates
         (
@@ -167,6 +170,7 @@ public class WorldGenerator : MonoBehaviour
         Vector2Int Saturation = new Vector2Int(99, 100);
         Vector2Int Brightness = new Vector2Int(99, 100);
         List<Color> PlateColours = TextureGenerator.GenerateHSVColours(NumTectonicPlates + 1, Hues, Saturation, Brightness);
+        PlateColours.Shuffle();
 
         PolyMapRT = PolyMapGen.MainRTex;
 
@@ -175,11 +179,13 @@ public class WorldGenerator : MonoBehaviour
         Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(TotalNumberVorCells, VoronoiTectonicCells, PlateColours);
         PolyMapRT = PolyMapGen.RenderPolygonalMap(WorldMapMesh, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());
         RenderTexture OutlineTest = TextureGenerator.DrawTextureOutline(PolyMapRT);
+        RenderTexture ThickenedOutlineTest = TextureGenerator.DrawTextureOutline(OutlineTest); // ARGH!!
         SaveMapAsPNG("PlateOutlineTexMap", OutlineTest);
+        SaveMapAsPNG("PlateThickenedOutlineTexMap", ThickenedOutlineTest);
         SaveMapAsPNG("PlateTexMap", PolyMapRT);
 
         Mesh ArrowMesh = PolyMapGen.GenerateTectonicPlateCellArrows(PolyMapGen.Vor, VoronoiTectonicCells, PlateDirections);
-        RenderTexture ArrowRT = PolyMapGen.RenderArrows(ArrowMesh);
+        RenderTexture ArrowRT = PolyMapGen.RenderArrows(ArrowMesh, Color.red);
 
         SaveMapAsPNG("ArrowTexMap", ArrowRT);
 
@@ -208,9 +214,13 @@ public class WorldGenerator : MonoBehaviour
         List<Texture> TexturesToMerge = new List<Texture>();
         TexturesToMerge.Add(ContinentMapRT);
         TexturesToMerge.Add(ArrowRT);
-        TexturesToMerge.Add(OutlineTest);
+        TexturesToMerge.Add(ThickenedOutlineTest);
         Texture2D OverlayedMapTex = TextureGenerator.MergeTextures(TexturesToMerge.ToArray());
         SaveMapAsPNG("OverlayedMapTex", OverlayedMapTex);
+
+
+
+        //UpdateMapDisplay(OverlayedMapTex, WorldSizes);
     }
 
     private List<Vector3> PickPoissonRandomPoints(Vector2Int InWorldSizes, int InNumPoints, int InPadding, int InRadius)

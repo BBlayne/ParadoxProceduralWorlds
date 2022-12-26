@@ -285,6 +285,33 @@ public static class TextureGenerator
         return OutRTex;
     }
 
+    public static RenderTexture ThickenOutlinesInTexture(Texture InTex)
+    {
+        RenderTexture OutRTex = new RenderTexture(InTex.width, InTex.height, 0);
+        OutRTex.enableRandomWrite = true;
+        OutRTex.Create();
+
+        // Shader Stuff
+        ComputeShader Shader = Resources.Load(shaderPath) as ComputeShader;
+        if (Shader == null)
+        {
+            Debug.LogError(noShaderMsg);
+            return null;
+        }
+
+        int Kernel = Shader.FindKernel("ThickenLineTexture");
+
+        // Set Variables/Uniforms
+        int[] resInts = { InTex.width, InTex.height };
+        Shader.SetInts("ThickenLineTextureInputDims", resInts);
+        Shader.SetTexture(Kernel, "ThickenLnTexInput", InTex);
+        Shader.SetTexture(Kernel, "ThickenLnTexOutput", OutRTex);
+
+        Shader.Dispatch(Kernel, Mathf.CeilToInt(InTex.width / 16f), Mathf.CeilToInt(InTex.height / 16f), 1);
+
+        return OutRTex;
+    }
+
     public static RenderTexture DrawDalaunayMap(UnityEngine.Mesh InMesh, int InMapWidth, int InMapHeight)
     {
         // final result render texture
