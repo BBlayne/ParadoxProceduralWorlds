@@ -75,6 +75,11 @@ public static class TriangleNetUtility
     {
         return new Vector3((float)InPoint.X, (float)InPoint.Y, 0);
     }
+
+    public static Vector2 PointToVector2(TPoint InPoint)
+    {
+        return new Vector2((float)InPoint.X, (float)InPoint.Y);
+    }
 }
 
 
@@ -218,6 +223,7 @@ public interface IHeapItem<T> : IComparable<T>
 
 public static class MapUtils
 {
+    //public static 
     public static List<Vector3> GenerateSiteDistribution
     (
         ProceduralWorlds.ESiteDistribution InSiteDistribution,
@@ -382,6 +388,51 @@ public static class MapUtils
                     0
                 )
             );
+        }
+
+        return Points;
+    }
+
+    public static List<Vector3> GenerateRandomPointsMirrored2D(int InNumPoints, Vector2Int InMapSizes, int InPadding)
+    {
+        List<Vector3> Points = new List<Vector3>();
+
+        float EdgeWidth = 0.05f;
+        int EdgePointsNum = Mathf.RoundToInt(EdgeWidth * InNumPoints);
+        int MiddlePointsNum = InNumPoints - (EdgePointsNum * 2);
+        int MaxEdgeWidth = Mathf.RoundToInt((InMapSizes.x - (2 * InPadding)) * EdgeWidth);
+
+        List<Vector3> LeftPoints = new List<Vector3>();
+        for (int i = 0; i < EdgePointsNum; i++)
+        {
+            Vector3 Pos = new Vector3(
+                UnityEngine.Random.Range(InPadding, MaxEdgeWidth),
+                UnityEngine.Random.Range(InPadding, InMapSizes.y - InPadding),
+                0);
+
+            LeftPoints.Add(Pos);
+            Points.Add(Pos);
+        }
+
+        for (int i = 0; i < MiddlePointsNum; i++)
+        {
+            Points.Add
+            (
+                new Vector3
+                (
+                    UnityEngine.Random.Range(InPadding + MaxEdgeWidth, InMapSizes.x - MaxEdgeWidth - InPadding),
+                    UnityEngine.Random.Range(InPadding, InMapSizes.y - InPadding),
+                    0
+                )
+            );
+        }
+
+        for (int i = 0; i < LeftPoints.Count; i++)
+        {
+            Vector3 MirroredPos = new Vector3();
+            MirroredPos.y = LeftPoints[i].y;
+            MirroredPos.x = InMapSizes.x - LeftPoints[i].x;
+            Points.Add(MirroredPos);
         }
 
         return Points;

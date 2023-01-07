@@ -101,7 +101,7 @@ namespace TriangleNet.Topology.DCEL
                 yield return edge;
 
                 edge = edge.Next;
-            } while (edge.ID != first);
+            } while (edge != null && edge.ID != first);
         }
 
         public override string ToString()

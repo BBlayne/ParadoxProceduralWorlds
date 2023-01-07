@@ -5,6 +5,7 @@ using TriangleNet.Geometry;
 using TVertex = TriangleNet.Geometry.Vertex;
 using System.Linq;
 using DataStructures.ViliWonka.KDTree;
+using TMPro;
 using VQuery = DataStructures.ViliWonka.KDTree.KDQuery;
 using TriangleNet.Voronoi;
 using TMesh = TriangleNet.Mesh;
@@ -25,7 +26,8 @@ namespace ProceduralWorlds
     public enum ESiteDistribution
     {
         RANDOM,
-        POISSON
+        POISSON,
+        RANDOM_MIRRORED
     }
 
     public enum ECellColour
@@ -62,7 +64,8 @@ namespace ProceduralWorlds
 
         public RenderTexture MainRTex = null;
 
-        public BoundedVoronoi Vor = null;
+        public BoundedVoronoi BoundedVor = null;
+        public VoronoiBase BaseVor = null;
         public TMesh Triang = null;
 
         private Mesh CombinedVoronoiMesh = null;
@@ -142,6 +145,9 @@ namespace ProceduralWorlds
         {
             switch (SiteDistributionMode)
             {
+            case ESiteDistribution.RANDOM_MIRRORED:
+                InitialSites = MapUtils.GenerateRandomPointsMirrored2D(NumberOfTargetCells, MapDimensions, MapPadding).ToArray();
+                break;
             case ESiteDistribution.RANDOM:
             default:
                 InitialSites = MapUtils.GenerateRandomPoints2D(NumberOfTargetCells, MapDimensions, MapPadding).ToArray();
@@ -151,6 +157,9 @@ namespace ProceduralWorlds
 
         public Mesh GetArrowMesh(float InStemWidth, float InTipWidth, float InTipLength, float InStemLength)
         {
+            // Generates an Arrow that's centered near the approximate center of gravity, 
+            // Instead of being centered about the origin of the stem.
+
             // setup
             List<Vector3> VerticeList = new List<Vector3>();
             List<int> TriangleList = new List<int>();
@@ -160,10 +169,11 @@ namespace ProceduralWorlds
             // Stem Setup
             Vector3 StemOrigin = Vector3.zero;
             float StemHalfWidth = InStemWidth / 2;
+            float StemHalfLength = InStemLength / 2;
 
             // Stem Points
-            VerticeList.Add(StemOrigin + (StemHalfWidth * Vector3.down));
-            VerticeList.Add(StemOrigin + (StemHalfWidth * Vector3.up));
+            VerticeList.Add(StemOrigin + (StemHalfWidth * Vector3.down) - (StemHalfLength * Vector3.right));
+            VerticeList.Add(StemOrigin + (StemHalfWidth * Vector3.up) - (StemHalfLength * Vector3.right));
             VerticeList.Add(VerticeList[0] + (InStemLength * Vector3.right));
             VerticeList.Add(VerticeList[1] + (InStemLength * Vector3.right));
 
@@ -177,7 +187,7 @@ namespace ProceduralWorlds
             TriangleList.Add(2);
 
             // Tip setup
-            Vector3 TipOrigin = InStemLength * Vector3.right;
+            Vector3 TipOrigin = StemHalfLength * Vector3.right;
             float TipHalfWidth = InTipWidth / 2;
 
             // Tip Points
@@ -203,7 +213,8 @@ namespace ProceduralWorlds
             CombineInstance[] CombineInstances = new CombineInstance[InVor.Faces.Count];
             for (int i = 0; i < InVor.Faces.Count; i++)
             {
-                CombineInstances[i].mesh = GetArrowMesh(2.5f, 8, 5, 5);
+                CombineInstances[i].mesh = GetArrowMesh(2, 6, 3, 4);
+
                 EPlateDirections CellDirection = InDirections[InTectonicPlateCellIndices[i] - 1];
                 Quaternion ArrowRotation = Quaternion.identity;
                 Vector3 CellPosition = TriangleNetUtility.PointToVector3(InVor.Faces[i].generator);
@@ -247,13 +258,33 @@ namespace ProceduralWorlds
             TMesh Triangulation = GenerateDelaunayTriangulation(InitialSites, 2);
             Triang = Triangulation;
 
-            BoundedVoronoi mBoundedVoronoi = GetVoronoiTesselationFromTriangulation(Triang);
-            MoveVoronoiVerticesToDelauneyCentroids(mBoundedVoronoi, 2.5f);
-            Vor = mBoundedVoronoi;
+            Mesh TriangUnityMesh = GenerateUnityMesh(Triangulation);
+            RenderTexture TriangGraphRTex = RenderPolygonalWireframeMap(TriangUnityMesh, null, TextureGenerator.GetUnlitTextureMaterial(), Color.white);
 
-            List<Mesh> VorCellMeshes = TriangulateVoronoiCells(Vor);
+            if (bSaveDebugMaps)
+            {
+                TextureGenerator.SaveTextureAsPNG(TextureGenerator.CreateTexture2D(TriangGraphRTex), "TriangUnityMesh");
+            }
+
+            BoundedVoronoi mBoundedVoronoi = GetBoundedVoronoiTesselationFromTriangulation(Triang);
+            StandardVoronoi mStdVoronoi = GetStandardVoronoiTesselationFromTriangulation(Triang);
+            BoundedVor = mBoundedVoronoi;
+            BaseVor = mStdVoronoi;
+
+            MoveVoronoiVerticesToDelauneyCentroids(mBoundedVoronoi, 2.5f);
+            BoundedVor = mBoundedVoronoi;
+
+            Mesh VoronoiUnityMesh = GenerateVoronoiUnityMesh(mBoundedVoronoi);
+            RenderTexture VoronoiGraphRTex = RenderPolygonalWireframeMap(VoronoiUnityMesh, null, TextureGenerator.GetUnlitTextureMaterial(), Color.white);
+            
+            if (bSaveDebugMaps)
+            {
+                TextureGenerator.SaveTextureAsPNG(TextureGenerator.CreateTexture2D(VoronoiGraphRTex), "VoronoiUnityMesh");
+            }
+
+            List<Mesh> VorCellMeshes = TriangulateVoronoiCells(mBoundedVoronoi, false);
             Debug.Log("");
-            RandomLandDistribution(Vor.Faces.Count, 0.25f);
+            RandomLandDistribution(mBoundedVoronoi.Faces.Count, 0.25f);
             Texture2D VoronoiTexture = TextureGenerator.GenerateBiColourElevationTextureMap(VorCellMeshes.Count, MapCells);
             if (bSaveDebugMaps)
             {
@@ -379,10 +410,21 @@ namespace ProceduralWorlds
                 delaneyShape.Add(Vertex);
             }
 
+            // Fucks up somewhere because out of bounds...?
             delaneyShape.Add(new TVertex(0, 0));
-            delaneyShape.Add(new TVertex(1, MapDimensions.y)); 
-            delaneyShape.Add(new TVertex(MapDimensions.x, MapDimensions.y)); 
-            delaneyShape.Add(new TVertex(MapDimensions.x, 1)); 
+            delaneyShape.Add(new TVertex(0, MapDimensions.y + 1));
+            delaneyShape.Add(new TVertex(MapDimensions.x + 1, MapDimensions.y + 1));
+            delaneyShape.Add(new TVertex(MapDimensions.x + 1, 0));
+
+            //delaneyShape.Add(new TVertex(0, 0));
+            //delaneyShape.Add(new TVertex(0, MapDimensions.y)); 
+            //delaneyShape.Add(new TVertex(MapDimensions.x, MapDimensions.y));
+            //delaneyShape.Add(new TVertex(MapDimensions.x, 0)); 
+
+            //delaneyShape.Add(new TVertex(0, 0));
+            //delaneyShape.Add(new TVertex(1, MapDimensions.y)); 
+            //delaneyShape.Add(new TVertex(MapDimensions.x, MapDimensions.y)); 
+            //delaneyShape.Add(new TVertex(MapDimensions.x, 1)); 
 
             delaneyShape.Bounds();
 
@@ -397,12 +439,17 @@ namespace ProceduralWorlds
             return TriangleMesh;
         }
 
-        public BoundedVoronoi GetVoronoiTesselationFromTriangulation(TMesh InTriangleMesh)
+        public StandardVoronoi GetStandardVoronoiTesselationFromTriangulation(TMesh InTriangleMesh)
+        {
+            return new StandardVoronoi(InTriangleMesh);
+        }
+
+        public BoundedVoronoi GetBoundedVoronoiTesselationFromTriangulation(TMesh InTriangleMesh)
         {
             return new BoundedVoronoi(InTriangleMesh);
         }
 
-        public Mesh GenerateVoronoiUnityMesh(BoundedVoronoi InVor)
+        public Mesh GenerateVoronoiUnityMesh(VoronoiBase InVor)
         {
             Mesh OutVorMesh = new Mesh();
 
@@ -495,7 +542,7 @@ namespace ProceduralWorlds
             }
         }
 
-        public List<Mesh> TriangulateVoronoiCells(BoundedVoronoi InVorGraph)
+        public List<Mesh> TriangulateVoronoiCells(VoronoiBase InVorGraph, bool bCheckBounds)
         {
             TriangleNet.Meshing.ConstraintOptions options = new TriangleNet.Meshing.ConstraintOptions()
             {
@@ -507,7 +554,7 @@ namespace ProceduralWorlds
             for (int VorIndex = 0; VorIndex < InVorGraph.Faces.Count; VorIndex++)
             {
                 TFace CurrentFace = InVorGraph.Faces[VorIndex];
-                if (CurrentFace == null)
+                if (CurrentFace == null || (bCheckBounds && !CurrentFace.bounded))
                 {
                     continue;
                 }
@@ -518,7 +565,11 @@ namespace ProceduralWorlds
                 // Better method
                 foreach (THalfEdge CurrentFaceEdge in CurrentFaceEdges)
                 {
-                    TVertex VertexToAdd = new TVertex(CurrentFaceEdge.Origin.x, CurrentFaceEdge.Origin.y);
+                    // Rounding in attempt to fix an issue with errant pixels
+                    double Ecks = Mathf.Round((float)CurrentFaceEdge.Origin.X);
+                    double Why = Mathf.Round((float)CurrentFaceEdge.Origin.Y);
+
+                    TVertex VertexToAdd = new TVertex(Ecks, Why);
                     DelaneyShape.Add(VertexToAdd);
                 }
                 DelaneyShape.Bounds();
@@ -531,10 +582,11 @@ namespace ProceduralWorlds
 
         public void GenerateUVsForVoronoiUnityMesh(List<Mesh> InVoronoiTriangulations)
         {
+            float Offset = 0.0625f / InVoronoiTriangulations.Count;
+            Debug.Log("Generating UVs for " + InVoronoiTriangulations.Count + " polygonal cells.");
             for (int i = 0; i < InVoronoiTriangulations.Count; i++)
             {
-                List<Vector2> MeshUVs = new List<Vector2>();
-                float Offset = 0.5f / InVoronoiTriangulations.Count;
+                List<Vector2> MeshUVs = new List<Vector2>();                
                 for (int j = 0; j < InVoronoiTriangulations[i].vertexCount; j++)
                 {
                     float NuU = ((float)i / InVoronoiTriangulations.Count) + Offset;
@@ -570,8 +622,38 @@ namespace ProceduralWorlds
         }
 
         // Adjusting Voronoi Vertices into Centroids of the Delaunay Triangles
-        public void MoveVoronoiVerticesToDelauneyCentroids(BoundedVoronoi InVor, float InRange)
+        public void MoveVoronoiVerticesToDelauneyCentroids(BoundedVoronoi InVor, float InJitterRange)
         {
+            // Iterate through and relax the vertices of all voronoi faces except for those along the map edges
+            foreach (var mFace in InVor.Faces)
+            {
+                if (mFace.bounded)
+                {
+                    List<THalfEdge> FaceEdges = mFace.EnumerateEdges().ToList();
+                    foreach (var mFaceEdge in FaceEdges)
+                    {
+                        // get all edges surrounding this vertex
+                        List<THalfEdge> VertexEdges = mFaceEdge.Origin.EnumerateEdges().ToList();
+                        var CurrentVertex = InVor.Vertices[mFaceEdge.Origin.ID];
+                        // compute the centroid by getting the location of the site of each face
+                        Vector2 DelaunayTriangleCentroid = new Vector2(0, 0);
+                        foreach (var VertexEdge in VertexEdges)
+                        {
+                            DelaunayTriangleCentroid += new Vector2(
+                                (float)VertexEdge.Face.generator.X, 
+                                (float)VertexEdge.Face.generator.Y
+                            );
+                        }
+
+                        DelaunayTriangleCentroid /= VertexEdges.Count;
+
+                        CurrentVertex.X = Mathf.Round(DelaunayTriangleCentroid.x + Random.Range(-InJitterRange, InJitterRange));
+                        CurrentVertex.Y = Mathf.Round(DelaunayTriangleCentroid.y + Random.Range(-InJitterRange, InJitterRange));
+                    }
+                }
+            }
+
+            /*
             for (int VVertexIndex = 0; VVertexIndex < InVor.Vertices.Count; VVertexIndex++)
             {
                 var CurrentVertex = InVor.Vertices[VVertexIndex];
@@ -622,9 +704,10 @@ namespace ProceduralWorlds
 
                 DelaunayTriangleCentroid /= Edges.Count;
 
-                CurrentVertex.X = DelaunayTriangleCentroid.x + Random.Range(-InRange, InRange);
-                CurrentVertex.Y = DelaunayTriangleCentroid.y + Random.Range(-InRange, InRange);
+                CurrentVertex.X = Mathf.Round(DelaunayTriangleCentroid.x + Random.Range(-InRange, InRange));
+                CurrentVertex.Y = Mathf.Round(DelaunayTriangleCentroid.y + Random.Range(-InRange, InRange));
             }
+            */
         }
 
         // Might have this have a mode passed in for Solid vs Wireframe...
@@ -645,6 +728,23 @@ namespace ProceduralWorlds
             return ArrowMapRT;
         }
 
+        public RenderTexture RenderPolygonalWireframeMap(Mesh InMapMesh, Material InMeshMaterial, Color InColour, bool isBGTransparent = true)
+        {
+            RenderTexture PolyMapRT = null;
+            if (InMeshMaterial != null)
+            {
+                InMeshMaterial.SetColor("_Color", InColour);
+                PolyMapRT = new RenderTexture(MapDimensions.x, MapDimensions.y, 0);
+                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, true, isBGTransparent);
+                if (bSaveDebugMaps)
+                {
+                    //TextureGenerator.SaveMapAsPNG("RenderPolygonalMapTest", PolyMapRT);
+                }
+            }
+
+            return PolyMapRT;
+        }
+
         public RenderTexture RenderPolygonalWireframeMap(Mesh InMapMesh, Texture2D InTexture, Material InMeshMaterial, Color InColour, bool isBGTransparent = true)
         {
             RenderTexture PolyMapRT = null;
@@ -660,7 +760,7 @@ namespace ProceduralWorlds
                 PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, true, isBGTransparent);
                 if (bSaveDebugMaps)
                 {
-                    TextureGenerator.SaveMapAsPNG("RenderPolygonalMapTest", PolyMapRT);
+                    //TextureGenerator.SaveMapAsPNG("RenderPolygonalMapTest", PolyMapRT);
                 }
             }
 
@@ -678,10 +778,10 @@ namespace ProceduralWorlds
                     InMeshMaterial.mainTexture = InTexture;
                 }
                 
-                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false, false);
+                PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapDimensions, InMeshMaterial, false, true);
                 if (bSaveDebugMaps)
                 {
-                    TextureGenerator.SaveMapAsPNG("RenderPolygonalMapTest", PolyMapRT);
+                    TextureGenerator.SaveMapAsPNG("RenderPolygonalMapDebug", PolyMapRT);
                 }
             }
 
@@ -1005,6 +1105,54 @@ namespace ProceduralWorlds
             }
 
             return CellsToBeFilled;
+        }
+
+        public RenderTexture GenerateVorCellIdTex(BoundedVoronoi InVorGraph, Vector2Int InWorldSizes, TMP_Text InTextObj, float InTxtSize)
+        {
+            RenderTexture OutRTex = new RenderTexture(InWorldSizes.x, InWorldSizes.y, 0);
+            RenderTexture TempRTex = RenderTexture.GetTemporary(
+                InWorldSizes.x,
+                InWorldSizes.y,
+                0,
+                RenderTextureFormat.Default,
+                RenderTextureReadWrite.Linear
+            );
+
+            int oldQuality = QualitySettings.GetQualityLevel();
+            QualitySettings.SetQualityLevel(5);
+
+            RenderTexture Previous = RenderTexture.active;
+            RenderTexture.active = TempRTex;
+            RenderTexture TestTextRTex = null;
+
+            GL.PushMatrix();
+            GL.LoadPixelMatrix(0, InWorldSizes.x, InWorldSizes.y, 0);
+            foreach (var CellFace in InVorGraph.Faces)
+            {
+                if (TestTextRTex != null)
+                {
+                    TestTextRTex.Release();
+                    UnityEngine.Object.Destroy(TestTextRTex);
+                }
+                InTextObj.SetText(CellFace.ID.ToString());
+                InTextObj.ForceMeshUpdate();
+                Vector3 Position = new Vector3(
+                    (float)CellFace.generator.X / InWorldSizes.x, 
+                    (float)CellFace.generator.Y / InWorldSizes.y, 
+                    0);
+
+                TestTextRTex = TextureGenerator.BlitTextToTexture(InTextObj, Position, InWorldSizes, InTxtSize);
+                Graphics.DrawTexture(new Rect(0, 0, InWorldSizes.x, InWorldSizes.y), TestTextRTex);
+            }
+            GL.PopMatrix();
+
+            Graphics.Blit(TempRTex, OutRTex);
+            RenderTexture.active = Previous;
+            RenderTexture.ReleaseTemporary(TempRTex);
+
+            QualitySettings.SetQualityLevel(oldQuality);
+
+            return OutRTex;
         }
     }
 }

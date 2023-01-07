@@ -7,13 +7,14 @@ using System.IO;
 using System.Threading.Tasks;
 using Unity.Jobs;
 using Unity.Collections;
+using TMPro;
 using Jobberwocky.GeometryAlgorithms.Source.API;
 using Jobberwocky.GeometryAlgorithms.Source.Core;
 using Jobberwocky.GeometryAlgorithms.Source.Parameters;
 
 public static class TextureGenerator
 {
-    public static string AppPath = Application.dataPath + "/Temp/";
+    public static string AppPath = Application.dataPath + "/../ExportedImages/";
 
     private static string shaderPath = "Shaders/TextureUtilShader";
     private static string DrawPixelsToTexShaderPath = "Shaders/DrawPixelsToTexture";
@@ -219,9 +220,26 @@ public static class TextureGenerator
         return outRTex;
     }
 
-    public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe, bool bIsTransparentBG)
+    public static RenderTexture BlitTextToTexture(TMP_Text InTextObj, Vector3 InPosition, Vector2Int InMapSizes, float InSize)
     {
         RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
+
+        Nothke.Utils.RTUtils.BeginOrthoRendering(outRTex);
+        {
+            GL.Clear(true, true, Color.clear);
+
+            Nothke.Utils.RTUtils.DrawTMPText(outRTex, InTextObj, InPosition, InSize);
+        }
+        Nothke.Utils.RTUtils.EndRendering(outRTex);
+
+        GL.wireframe = false;
+
+        return outRTex;
+    }
+
+    public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe, bool bIsTransparentBG)
+    {
+        RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0, RenderTextureFormat.ARGB32);
 
         Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
         {
@@ -744,6 +762,44 @@ public static class TextureGenerator
         return OutTex;
     }
 
+    public static RenderTexture MergeTexturesToRenderTexture(params Texture[] InTextures)
+    {
+        if (InTextures == null || InTextures.Length == 0)
+        {
+            return null;
+        }
+
+        int oldQuality = QualitySettings.GetQualityLevel();
+        QualitySettings.SetQualityLevel(5);
+
+        RenderTexture RenderTex = RenderTexture.GetTemporary(
+            InTextures[0].width,
+            InTextures[0].height,
+            0,
+            RenderTextureFormat.Default,
+            RenderTextureReadWrite.Linear
+        );
+
+        Graphics.Blit(InTextures[0], RenderTex);
+        RenderTexture Previous = RenderTexture.active;
+        RenderTexture.active = RenderTex;
+        GL.PushMatrix();
+        GL.LoadPixelMatrix(0, InTextures[0].width, InTextures[0].height, 0);
+        for (int i = 1; i < InTextures.Length; i++)
+        {
+            Graphics.DrawTexture(new Rect(0, 0, InTextures[0].width, InTextures[0].height), InTextures[i]);
+        }
+        GL.PopMatrix();
+
+        RenderTexture OutRTex = new RenderTexture(InTextures[0].width, InTextures[0].height, 0);
+        Graphics.Blit(RenderTex, OutRTex);
+        RenderTexture.active = Previous;
+        RenderTexture.ReleaseTemporary(RenderTex);
+        QualitySettings.SetQualityLevel(oldQuality);
+
+        return OutRTex;
+    }
+
     public static Texture2D OverlayTwoTextures(RenderTexture InSrcA, RenderTexture InSrcB)
     {
         RenderTexture RenderTex = RenderTexture.GetTemporary(
@@ -794,7 +850,8 @@ public static class TextureGenerator
         texture.ReadPixels(new Rect(0, 0, InRTX.width, InRTX.height), 0, 0);
         texture.filterMode = FilterMode.Point;
         texture.wrapMode = TextureWrapMode.Clamp;
-        texture.Apply();
+        texture.minimumMipmapLevel = 0;
+        texture.Apply(false);
         RenderTexture.active = null;
         return texture;
     }
@@ -888,16 +945,16 @@ public static class TextureGenerator
             (uint)texture.height
         );
 
-        File.WriteAllBytes(Application.dataPath + "/Temp/" + name + ".png", bytes);
-        Debug.Log(bytes.Length / 1024 + "Kb was saved as: " + Application.dataPath + "/Temp/" + name + ".png");
+        File.WriteAllBytes(AppPath + name + ".png", bytes);
+        Debug.Log(bytes.Length / 1024 + "Kb was saved as: " + AppPath + name + ".png");
     }
 
     public static void SaveTextureAsPNG(Texture2D texture, string name)
     {
         // Encode texture into PNG        
         byte[] bytes = texture.EncodeToPNG();
-        File.WriteAllBytes(Application.dataPath + "/Temp/" + name + ".png", bytes);
-        Debug.Log(bytes.Length / 1024 + "Kb was saved as: " + Application.dataPath + "/Temp/" + name + ".png");
+        File.WriteAllBytes(AppPath + name + ".png", bytes);
+        Debug.Log(bytes.Length / 1024 + "Kb was saved as: " + AppPath + name + ".png");
     }
 
     public static List<Color> GenerateHSVColours(int InTotalPoints, Vector2Int InHue, Vector2Int InSat, Vector2Int InVal, int InHueOffset = 30)
@@ -994,7 +1051,7 @@ public static class TextureGenerator
         }
 
         OutTex.SetPixels(CellColours.ToArray());
-        OutTex.Apply();
+        OutTex.Apply(false);
 
         SaveMapAsPNG("TectonicPlateTextureMap", OutTex);
 

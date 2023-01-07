@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMesh = TriangleNet.Mesh;
 using TriangleNet.Voronoi;
+using TMPro;
 
 public class WorldGenerator : MonoBehaviour
 {
@@ -79,7 +80,10 @@ public class WorldGenerator : MonoBehaviour
     public bool bIsRandomFloodFill = false;
     public bool bOutputDebugMaps = true;
 
+    public TMP_Text TestTMPText = null;
+
     private string AppPath = "";
+    private string ImageExportPath = "../ExportedImages";
 
     public delegate void OnRegionsGeneratedDelegate(RegionGenerator.RegionDebugInfo regionDebugInfo);
     public static OnRegionsGeneratedDelegate regionsGeneratedDelegate;
@@ -120,7 +124,7 @@ public class WorldGenerator : MonoBehaviour
         //var timer = new System.Diagnostics.Stopwatch();
         //timer.Start();
 
-        AppPath = Application.dataPath + "/Temp/";
+        AppPath = Application.dataPath + "/../ExportedImages/";
 
 
 
@@ -134,26 +138,39 @@ public class WorldGenerator : MonoBehaviour
         ResetRtx(PolyMapRT);
 
         PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", TargetNumberOfCells);
-        PolyMapGen.SetDistributionMode(ProceduralWorlds.ESiteDistribution.RANDOM);
+        PolyMapGen.SetDistributionMode(ProceduralWorlds.ESiteDistribution.RANDOM_MIRRORED);
         PolyMapGen.SetPadding(MapPadding);
         Vector2Int WorldSizes = new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight);
         PolyMapGen.MapDimensions = WorldSizes;
         int NumTectonicPlates = NumberOfTectonicPlates;
 
+        TestTMPText.gameObject.SetActive(true);
+        TestTMPText.SetText("");
+        TestTMPText.ForceMeshUpdate();
+
         // World Map Generation
         Mesh WorldMapMesh = PolyMapGen.GeneratePolygonalMapMesh();
-        int TotalNumberVorCells = PolyMapGen.Vor.Faces.Count;
+        int TotalNumberVorCells = PolyMapGen.BoundedVor.Faces.Count;
 
-        RenderTexture VorRTex = PolyMapGen.RenderPolygonalWireframeMap(WorldMapMesh, null, TextureGenerator.GetUnlitMaterial(), Color.white);
-        SaveMapAsPNG("VorRTex", VorRTex);
+        BoundedVoronoi TheBoundedVoronoiGraph = PolyMapGen.BoundedVor;
+        Mesh VoronoiUnityMesh = PolyMapGen.GenerateVoronoiUnityMesh(TheBoundedVoronoiGraph);
+        RenderTexture VoronoiGraphRTex = PolyMapGen.RenderPolygonalWireframeMap(VoronoiUnityMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+        SaveMapAsPNG("VoronoiGraphRTex", VoronoiGraphRTex);
+
+        RenderTexture TriangRTex = PolyMapGen.RenderPolygonalWireframeMap(WorldMapMesh, null, TextureGenerator.GetUnlitMaterial(), Color.white);
+        SaveMapAsPNG("TriangRTex", TriangRTex);
+
+        RenderTexture CellIDRTex = PolyMapGen.GenerateVorCellIdTex(TheBoundedVoronoiGraph, WorldSizes, TestTMPText, 0.005f);
+        SaveMapAsPNG("CellIDRTex", CellIDRTex);
+        TestTMPText.gameObject.SetActive(false);
 
         //int PoissonPlatesRadius = 256; // relative to pixel dimensions of our target texture for rendering
         int[] VoronoiTectonicCells = GenerateTectonicPlates
         (
             PolyMapGen.MapDimensions, 
             NumTectonicPlates, 
-            MapPadding, 
-            PolyMapGen.Vor, 
+            MapPadding,
+            TheBoundedVoronoiGraph, 
             bIsRandomFloodFill
         );
 
@@ -180,22 +197,21 @@ public class WorldGenerator : MonoBehaviour
         PolyMapRT = PolyMapGen.RenderPolygonalMap(WorldMapMesh, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());
         RenderTexture OutlineTest = TextureGenerator.DrawTextureOutline(PolyMapRT);
         RenderTexture ThickenedOutlineTest = TextureGenerator.DrawTextureOutline(OutlineTest); // ARGH!!
+
         SaveMapAsPNG("PlateOutlineTexMap", OutlineTest);
         SaveMapAsPNG("PlateThickenedOutlineTexMap", ThickenedOutlineTest);
         SaveMapAsPNG("PlateTexMap", PolyMapRT);
 
-        Mesh ArrowMesh = PolyMapGen.GenerateTectonicPlateCellArrows(PolyMapGen.Vor, VoronoiTectonicCells, PlateDirections);
+        Mesh ArrowMesh = PolyMapGen.GenerateTectonicPlateCellArrows(TheBoundedVoronoiGraph, VoronoiTectonicCells, PlateDirections);
         RenderTexture ArrowRT = PolyMapGen.RenderArrows(ArrowMesh, Color.red);
 
         SaveMapAsPNG("ArrowTexMap", ArrowRT);
 
         //UpdateMapDisplay(PolyMapRT, WorldSizes);
 
-
-
         int[] VoronoiContinentCells = GenerateContinents
         (
-            PolyMapGen.Vor,
+            TheBoundedVoronoiGraph,
             WorldSizes,
             3,
             MapPadding,
@@ -213,14 +229,21 @@ public class WorldGenerator : MonoBehaviour
 
         List<Texture> TexturesToMerge = new List<Texture>();
         TexturesToMerge.Add(ContinentMapRT);
+        TexturesToMerge.Add(VoronoiGraphRTex);
         TexturesToMerge.Add(ArrowRT);
         TexturesToMerge.Add(ThickenedOutlineTest);
-        Texture2D OverlayedMapTex = TextureGenerator.MergeTextures(TexturesToMerge.ToArray());
+        //Texture2D OverlayedMapTex = TextureGenerator.MergeTextures(TexturesToMerge.ToArray());
+        RenderTexture OverlayedMapTex = TextureGenerator.MergeTexturesToRenderTexture(TexturesToMerge.ToArray());
         SaveMapAsPNG("OverlayedMapTex", OverlayedMapTex);
 
+        List<Texture> DebugTexturesToMerge = new List<Texture>();
+        DebugTexturesToMerge.Add(ContinentMapRT);
+        DebugTexturesToMerge.Add(VoronoiGraphRTex);
+        DebugTexturesToMerge.Add(CellIDRTex);
+        RenderTexture DebugOverlayedMapRTex = TextureGenerator.MergeTexturesToRenderTexture(DebugTexturesToMerge.ToArray());
+        SaveMapAsPNG("DebugOverlayedMapRTex", DebugOverlayedMapRTex);
 
-
-        //UpdateMapDisplay(OverlayedMapTex, WorldSizes);
+        UpdateMapDisplay(OverlayedMapTex, WorldSizes);
     }
 
     private List<Vector3> PickPoissonRandomPoints(Vector2Int InWorldSizes, int InNumPoints, int InPadding, int InRadius)
@@ -254,7 +277,7 @@ public class WorldGenerator : MonoBehaviour
 
         // Get the barycentric dual mesh, we'll extract the tectonic plate seed points from the voronoi diagram
         TMesh PlateTriang = PolyMapGen.GenerateDelaunayTriangulation(InitialSamplePoints.ToArray(), 5);
-        BoundedVoronoi PlateVor = PolyMapGen.GetVoronoiTesselationFromTriangulation(PlateTriang);
+        BoundedVoronoi PlateVor = PolyMapGen.GetBoundedVoronoiTesselationFromTriangulation(PlateTriang);
         if (bOutputDebugMaps)
         {
             Mesh PlateTriangMesh = PolyMapGen.GenerateUnityMeshFromTriangleNetMesh(PlateTriang);
