@@ -157,12 +157,30 @@ public class WorldGenerator : MonoBehaviour
         RenderTexture VoronoiGraphRTex = PolyMapGen.RenderPolygonalWireframeMap(VoronoiUnityMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
         SaveMapAsPNG("VoronoiGraphRTex", VoronoiGraphRTex);
 
+        // Testing stuff
+        //TMesh TVorTest = PolyMapGen.GetTriangulationFromBoundedVoronoi(TheBoundedVoronoiGraph);
+        //Mesh TVorTestMesh = PolyMapGen.GenerateUnityMeshFromTriangleNetMesh(TVorTest);
+        //PolyMapGen.GenerateVoronoiUVs(TheBoundedVoronoiGraph, TVorTestMesh);
+        //Vector2Int TestHues = new Vector2Int(30, 330);
+        //Vector2Int TestSaturation = new Vector2Int(50, 60);
+        //Vector2Int TestBrightness = new Vector2Int(80, 90);
+        //Texture2D TestVorColourTex = TextureGenerator.GenerateRandomColourTexture(TheBoundedVoronoiGraph.Faces.Count, TestHues, TestSaturation, TestBrightness);
+        //SaveMapAsPNG("TestVorColourTex", TestVorColourTex);
+        //RenderTexture TestVorRTex = PolyMapGen.RenderPolygonalMap(TVorTestMesh, TestVorColourTex, TextureGenerator.GetUnlitTextureMaterial());
+        //SaveMapAsPNG("TestVorRTex", TestVorRTex);
+
+        //RenderTexture TestWireframeVorRTex = PolyMapGen.RenderPolygonalWireframeMap(TVorTestMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+        //SaveMapAsPNG("TestWireframeVorRTex", TestWireframeVorRTex);
+        // End Testing stuff
+
         RenderTexture TriangRTex = PolyMapGen.RenderPolygonalWireframeMap(WorldMapMesh, null, TextureGenerator.GetUnlitMaterial(), Color.white);
         SaveMapAsPNG("TriangRTex", TriangRTex);
 
         RenderTexture CellIDRTex = PolyMapGen.GenerateVorCellIdTex(TheBoundedVoronoiGraph, WorldSizes, TestTMPText, 0.005f);
         SaveMapAsPNG("CellIDRTex", CellIDRTex);
         TestTMPText.gameObject.SetActive(false);
+
+        Dictionary<int, int> MapEdges = PolyMapGen.DetermineMapEdges(TheBoundedVoronoiGraph, TargetNumberOfCells, WorldSizes);
 
         //int PoissonPlatesRadius = 256; // relative to pixel dimensions of our target texture for rendering
         int[] VoronoiTectonicCells = GenerateTectonicPlates

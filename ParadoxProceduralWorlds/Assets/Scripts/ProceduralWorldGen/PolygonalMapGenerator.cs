@@ -70,6 +70,8 @@ namespace ProceduralWorlds
 
         private Mesh CombinedVoronoiMesh = null;
 
+        KDTree VSiteKDTree = null;
+
 
         public PolygonalMapGenerator(int InNumCells)
         {
@@ -274,6 +276,8 @@ namespace ProceduralWorlds
             MoveVoronoiVerticesToDelauneyCentroids(mBoundedVoronoi, 2.5f);
             BoundedVor = mBoundedVoronoi;
 
+            VSiteKDTree = GetVoronoiSiteKDTree(ConvertVoronoiCellsToVec3(mBoundedVoronoi));
+
             Mesh VoronoiUnityMesh = GenerateVoronoiUnityMesh(mBoundedVoronoi);
             RenderTexture VoronoiGraphRTex = RenderPolygonalWireframeMap(VoronoiUnityMesh, null, TextureGenerator.GetUnlitTextureMaterial(), Color.white);
             
@@ -393,6 +397,24 @@ namespace ProceduralWorlds
             return GenerateUnityMesh(InMesh);
         }
 
+        public TMesh GetTriangulationFromBoundedVoronoi(BoundedVoronoi InVor)
+        {
+            TriangleNet.Meshing.ConstraintOptions Options = null;
+            //TriangleNet.Meshing.ConstraintOptions Options = new TriangleNet.Meshing.ConstraintOptions()
+            //{
+            //    ConformingDelaunay = true
+            //};
+
+            Polygon DelaneyShape = new Polygon();
+            foreach (var VorEdge in InVor.HalfEdges)
+            {
+                TVertex CurrentVertex = new TVertex(VorEdge.Origin.X, VorEdge.Origin.Y);
+                DelaneyShape.Add(CurrentVertex);
+            }
+
+            return (TMesh)DelaneyShape.Triangulate(Options);
+        }
+
         public TMesh GenerateDelaunayTriangulation(Vector3[] InPoints, int InSmoothing = 0)
         {
             TriangleNet.Meshing.ConstraintOptions options = new TriangleNet.Meshing.ConstraintOptions()
@@ -428,7 +450,7 @@ namespace ProceduralWorlds
 
             delaneyShape.Bounds();
 
-            TMesh TriangleMesh = (TriangleNet.Mesh)delaneyShape.Triangulate(options);
+            TMesh TriangleMesh = (TMesh)delaneyShape.Triangulate(options);
 
             TriangleNet.Smoothing.SimpleSmoother simpleSmoother = new TriangleNet.Smoothing.SimpleSmoother();
             if (TriangleMesh != null)
@@ -578,7 +600,30 @@ namespace ProceduralWorlds
             }
 
             return VoronoiTriangulations;
-        }        
+        }
+
+        public void GenerateVoronoiUVs(BoundedVoronoi InVorGraph, Mesh InVorUnityMesh)
+        {
+            int NumFaces = InVorGraph.Faces.Count;
+            float Offset = 0.0625f / NumFaces;
+            List<Vector2> MeshUVs = new List<Vector2>();
+            int HalfEdgeCount = InVorGraph.HalfEdges.Count;
+            for (int i = 0; i < HalfEdgeCount; i++)
+            {
+                var Vert = InVorUnityMesh.vertices[i];
+                var VorVert = InVorGraph.HalfEdges[i].Origin;
+
+                float NuU = 0.0f;
+                if (InVorGraph.HalfEdges[i].Face != null && InVorGraph.HalfEdges[i].Face.ID >= 0)
+                {
+                    NuU = ((float)InVorGraph.HalfEdges[i].Face.ID / NumFaces) + Offset;
+                }
+                
+                MeshUVs.Add(new Vector2(NuU, 0.0f));
+            }
+
+            InVorUnityMesh.uv = MeshUVs.ToArray();
+        }
 
         public void GenerateUVsForVoronoiUnityMesh(List<Mesh> InVoronoiTriangulations)
         {
@@ -586,7 +631,7 @@ namespace ProceduralWorlds
             Debug.Log("Generating UVs for " + InVoronoiTriangulations.Count + " polygonal cells.");
             for (int i = 0; i < InVoronoiTriangulations.Count; i++)
             {
-                List<Vector2> MeshUVs = new List<Vector2>();                
+                List<Vector2> MeshUVs = new List<Vector2>();
                 for (int j = 0; j < InVoronoiTriangulations[i].vertexCount; j++)
                 {
                     float NuU = ((float)i / InVoronoiTriangulations.Count) + Offset;
@@ -979,7 +1024,15 @@ namespace ProceduralWorlds
             List<int> TempResults = new List<int>();
             // Convert a list of 2D coordinates into a list of corresponding 
 
-            KDTree SiteKDTree = GetVoronoiSiteKDTree(ConvertVoronoiCellsToVec3(InVoronoi));
+            KDTree SiteKDTree = null;
+            if (VSiteKDTree != null)
+            {
+                SiteKDTree = VSiteKDTree;
+            }
+            else
+            {
+                SiteKDTree = GetVoronoiSiteKDTree(ConvertVoronoiCellsToVec3(InVoronoi));
+            }            
             VQuery SiteQuery = new VQuery();
 
             foreach (var Coordinate in InListPoints)
@@ -992,6 +1045,7 @@ namespace ProceduralWorlds
 
         private List<Vector3> ConvertVoronoiCellsToVec3(BoundedVoronoi InVoronoi)
         {
+            
             List<Vector3> OutCoords = new List<Vector3>();
             foreach (var Face in InVoronoi.Faces)
             {
@@ -1153,6 +1207,62 @@ namespace ProceduralWorlds
             QualitySettings.SetQualityLevel(oldQuality);
 
             return OutRTex;
+        }
+
+        public Dictionary<int, int> DetermineMapEdges(BoundedVoronoi InVor, int InBaseCellCount, Vector2Int InMapSizes)
+        {
+            Dictionary<int, int> FaceEdges = new Dictionary<int, int>();
+            for (int i = InBaseCellCount; i < InVor.Faces.Count; i++)
+            {
+                var CurrentFace = InVor.Faces[i];
+                int CurrentEcks = Mathf.RoundToInt((float)CurrentFace.generator.X);
+                int CurrentWhy = Mathf.RoundToInt((float)CurrentFace.generator.Y);
+                if (CurrentEcks == 0)
+                {
+                    Debug.Log("CurrentEcks is 0");
+                    for (int j = InBaseCellCount; j < InVor.Faces.Count; j++)
+                    {
+                        var OtherFace = InVor.Faces[j];
+                        if (CurrentFace.ID == OtherFace.ID)
+                        {
+                            continue;
+                        }
+
+                        int OtherEcks = Mathf.RoundToInt((float)OtherFace.generator.X);
+                        int OtherWhy = Mathf.RoundToInt((float)OtherFace.generator.Y);
+
+                        if (OtherEcks >= InMapSizes.x - 1 && OtherWhy == CurrentWhy)
+                        {
+                            FaceEdges.Add(CurrentFace.ID, OtherFace.ID);
+                            break;
+                        }
+                    }
+                }
+                else if (CurrentEcks >= InMapSizes.x)
+                {
+                    Debug.Log("CurrentEcks is Map Width");
+                    for (int j = InBaseCellCount; j < InVor.Faces.Count; j++)
+                    {
+                        var OtherFace = InVor.Faces[j];
+
+                        if (CurrentFace.ID == OtherFace.ID)
+                        {
+                            continue;
+                        }
+
+                        int OtherEcks = Mathf.RoundToInt((float)OtherFace.generator.X);
+                        int OtherWhy = Mathf.RoundToInt((float)OtherFace.generator.Y);
+
+                        if (OtherEcks == 0 && OtherWhy == CurrentWhy)
+                        {
+                            FaceEdges.Add(CurrentFace.ID, OtherFace.ID);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return FaceEdges;
         }
     }
 }

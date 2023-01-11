@@ -240,7 +240,7 @@ public static class TextureGenerator
     public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe, bool bIsTransparentBG)
     {
         RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0, RenderTextureFormat.ARGB32);
-
+        GL.wireframe = false;
         Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
         {
             GL.Clear(true, true, bIsTransparentBG ? Color.clear : Color.black);
@@ -1090,6 +1090,18 @@ public static class TextureGenerator
         }
 
         OutTex.SetPixels(CellColours.ToArray());
+        OutTex.Apply();
+
+        return OutTex;
+    }
+
+    public static Texture2D GenerateRandomColourTexture(int InNumColours, Vector2Int Hues, Vector2Int Saturation, Vector2Int Brightness)
+    {
+        Texture2D OutTex = new Texture2D(InNumColours, 1, TextureFormat.RGBA32, false);
+
+        List<Color> Colours = GenerateHSVColours(InNumColours, Hues, Saturation, Brightness, 0);
+        Colours.Shuffle();
+        OutTex.SetPixels(Colours.ToArray());
         OutTex.Apply();
 
         return OutTex;
