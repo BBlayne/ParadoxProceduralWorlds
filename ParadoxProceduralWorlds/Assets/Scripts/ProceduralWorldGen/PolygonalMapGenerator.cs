@@ -70,8 +70,9 @@ namespace ProceduralWorlds
 
         private Mesh CombinedVoronoiMesh = null;
 
-        KDTree VSiteKDTree = null;
+        public KDTree VSiteKDTree = null;
 
+        public Dictionary<int, int> HorizontalMapEdges = null;
 
         public PolygonalMapGenerator(int InNumCells)
         {
@@ -277,6 +278,8 @@ namespace ProceduralWorlds
             BoundedVor = mBoundedVoronoi;
 
             VSiteKDTree = GetVoronoiSiteKDTree(ConvertVoronoiCellsToVec3(mBoundedVoronoi));
+
+            HorizontalMapEdges = DetermineHorizontalMapEdges(mBoundedVoronoi, NumberOfTargetCells, MapDimensions);
 
             Mesh VoronoiUnityMesh = GenerateVoronoiUnityMesh(mBoundedVoronoi);
             RenderTexture VoronoiGraphRTex = RenderPolygonalWireframeMap(VoronoiUnityMesh, null, TextureGenerator.GetUnlitTextureMaterial(), Color.white);
@@ -1209,17 +1212,28 @@ namespace ProceduralWorlds
             return OutRTex;
         }
 
-        public Dictionary<int, int> DetermineMapEdges(BoundedVoronoi InVor, int InBaseCellCount, Vector2Int InMapSizes)
+        public Dictionary<int, int> DetermineHorizontalMapEdges(BoundedVoronoi InVor, int InBaseCellCount, Vector2Int InMapSizes)
         {
+            //GetCellIDFromCoordinate
+            VQuery SiteQuery = new VQuery();
             Dictionary<int, int> FaceEdges = new Dictionary<int, int>();
             for (int i = InBaseCellCount; i < InVor.Faces.Count; i++)
             {
                 var CurrentFace = InVor.Faces[i];
                 int CurrentEcks = Mathf.RoundToInt((float)CurrentFace.generator.X);
                 int CurrentWhy = Mathf.RoundToInt((float)CurrentFace.generator.Y);
+                Vector3 CurrentFaceCoord = new Vector3(CurrentEcks, CurrentWhy);
                 if (CurrentEcks == 0)
                 {
                     Debug.Log("CurrentEcks is 0");
+                    List<int> Rezzes = new List<int>();
+                    Vector3 OtherFaceCoord = new Vector3(InMapSizes.x - CurrentEcks, CurrentWhy);
+                    int OtherFaceID = GetCellIDFromCoordinate(OtherFaceCoord, VSiteKDTree, SiteQuery, ref Rezzes);
+                    if (OtherFaceID >= 0)
+                    {
+                        FaceEdges.Add(CurrentFace.ID, OtherFaceID);
+                    }
+                    /*
                     for (int j = InBaseCellCount; j < InVor.Faces.Count; j++)
                     {
                         var OtherFace = InVor.Faces[j];
@@ -1237,6 +1251,7 @@ namespace ProceduralWorlds
                             break;
                         }
                     }
+                    */
                 }
                 else if (CurrentEcks >= InMapSizes.x)
                 {

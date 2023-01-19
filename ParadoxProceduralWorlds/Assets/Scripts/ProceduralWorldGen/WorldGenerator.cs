@@ -180,7 +180,7 @@ public class WorldGenerator : MonoBehaviour
         SaveMapAsPNG("CellIDRTex", CellIDRTex);
         TestTMPText.gameObject.SetActive(false);
 
-        Dictionary<int, int> MapEdges = PolyMapGen.DetermineMapEdges(TheBoundedVoronoiGraph, TargetNumberOfCells, WorldSizes);
+        Dictionary<int, int> MapEdges = PolyMapGen.DetermineHorizontalMapEdges(TheBoundedVoronoiGraph, TargetNumberOfCells, WorldSizes);
 
         //int PoissonPlatesRadius = 256; // relative to pixel dimensions of our target texture for rendering
         int[] VoronoiTectonicCells = GenerateTectonicPlates
