@@ -39,6 +39,8 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
+    public string SeedString = "Blayne";
+
     private WorldSettings _oldWorldSettings;
 
     public MapDisplay mapDisplay = null;
@@ -73,12 +75,23 @@ public class WorldGenerator : MonoBehaviour
     public Texture2D VoronoiTexture = null;
 
     public int TargetNumberOfCells = 1000;
+
+    [Range(10, 30)]
     public int MapPadding = 25;
+
+    [Range(2, 40)]
     public int NumberOfTectonicPlates = 30;
+
+    [Range(1, 10)]
     public int NumberOfContinents = 3;
+
+    [Range(0.1f, 1.0f)]
     public float WorldLandmassPercentage = 0.25f;
     public bool bIsRandomFloodFill = false;
     public bool bOutputDebugMaps = true;
+
+    [Range(10, 60)]
+    public int NumPoissonSamples = 30;
 
     public TMP_Text TestTMPText = null;
 
@@ -137,7 +150,7 @@ public class WorldGenerator : MonoBehaviour
     {
         ResetRtx(PolyMapRT);
 
-        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator("Blayne", TargetNumberOfCells);
+        PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator(SeedString, TargetNumberOfCells);
         PolyMapGen.SetDistributionMode(ProceduralWorlds.ESiteDistribution.RANDOM_MIRRORED);
         PolyMapGen.SetPadding(MapPadding);
         Vector2Int WorldSizes = new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight);
@@ -231,12 +244,12 @@ public class WorldGenerator : MonoBehaviour
         (
             TheBoundedVoronoiGraph,
             WorldSizes,
-            3,
+            NumberOfContinents,
             MapPadding,
-            0.3f
+            WorldLandmassPercentage
         );
 
-        List<Color> ContinentColours = TextureGenerator.GenerateHSVColours(3 + 1, Hues, Saturation, Brightness);
+        List<Color> ContinentColours = TextureGenerator.GenerateHSVColours(NumberOfContinents + 1, Hues, Saturation, Brightness);
         ContinentColours[0] = Color.black;
 
         Texture2D ContinentTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(TotalNumberVorCells, VoronoiContinentCells, ContinentColours);
@@ -268,7 +281,7 @@ public class WorldGenerator : MonoBehaviour
     {
         List<Vector3>  OutPoints = MapUtils.GetPoissonDistributedPoints2D
         (
-            InWorldSizes, InRadius, 30, InPadding, new List<Vector3>(), InNumPoints
+            InWorldSizes, InRadius, NumPoissonSamples, InPadding, new List<Vector3>(), InNumPoints
         );
 
         return OutPoints;

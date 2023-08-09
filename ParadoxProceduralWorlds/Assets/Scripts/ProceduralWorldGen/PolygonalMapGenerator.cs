@@ -918,7 +918,9 @@ namespace ProceduralWorlds
 
                     CellsToBeFilled[CurrentFaceIndex] = i + 1; // Offset so all cells default are black
 
-                    TFace Face = VorMap.Faces[CurrentFaceIndex];
+                    // Current Cell
+                    TFace Face = VorMap.Faces[CurrentFaceIndex];                    
+                    // Neighbours via the adjacent edges
                     List<THalfEdge> Edges = Face.EnumerateEdges().ToList();
                     foreach (var Edge in Edges)
                     {
@@ -936,6 +938,7 @@ namespace ProceduralWorlds
                 }                
             }
 
+            // Loop while all of the frontiers are non-empty
             int sum = Frontiers.Sum(collection => collection.Count);
             while (Frontiers.Sum(collection => collection.Count) > 0)
             {
@@ -961,6 +964,23 @@ namespace ProceduralWorlds
                 CellsToBeFilled[CurrentFaceIndex] = CurrentPlateIndex + 1;
 
                 TFace Face = VorMap.Faces[CurrentFaceIndex];
+
+                // Neighbouring cells at the opposite side of the map if the current cell is at the horizontal edge of the map
+                if (HorizontalMapEdges != null)
+                {
+                    int SisterCell = -1;
+                    if (HorizontalMapEdges.Count > 0 && HorizontalMapEdges.TryGetValue(CurrentFaceIndex, out SisterCell))
+                    {
+                        if (SisterCell >= 0 && !ClosedList.Contains(SisterCell))
+                        {
+                            //Debug.Log("Found Sister Cell..." + SisterCell + ", for Cell: " + CurrentFaceIndex);
+                            int Rank = bIsRandomSearch ? Random.Range(0, MaxCells * 100) : ClosedList.Count;
+                            Frontiers[CurrentPlateIndex].Add(new Priority(SisterCell, Rank));
+                            ClosedList.Add(SisterCell);
+                        }
+                    }
+                }
+
                 List<THalfEdge> Edges = Face.EnumerateEdges().ToList();
                 foreach (var Edge in Edges)
                 {
@@ -1121,6 +1141,22 @@ namespace ProceduralWorlds
 
                 // Iterate through all of the adjacent faces to the current voronoi cell face
                 TFace Face = VorMap.Faces[CurrentFaceIndex];
+                // Neighbouring cells at the opposite side of the map if the current cell is at the horizontal edge of the map
+                if (HorizontalMapEdges != null)
+                {
+                    int SisterCell = -1;
+                    if (HorizontalMapEdges.Count > 0 && HorizontalMapEdges.TryGetValue(CurrentFaceIndex, out SisterCell))
+                    {
+                        if (SisterCell >= 0 && !ClosedList.Contains(SisterCell))
+                        {
+                            Debug.Log("Found Sister Cell..." + SisterCell + ", for Cell: " + CurrentFaceIndex);
+                            int Rank = Random.Range(0, int.MaxValue);
+                            Frontier.Add(new PriorityVCell(SisterCell, CurrentFaceIndex, Rank));
+                            ClosedList.Add(SisterCell);
+                        }
+                    }
+                }
+
                 List<THalfEdge> Edges = Face.EnumerateEdges().ToList();
                 foreach (var Edge in Edges)
                 {
@@ -1225,7 +1261,7 @@ namespace ProceduralWorlds
                 Vector3 CurrentFaceCoord = new Vector3(CurrentEcks, CurrentWhy);
                 if (CurrentEcks == 0)
                 {
-                    Debug.Log("CurrentEcks is 0");
+                    //Debug.Log("CurrentEcks is 0");
                     List<int> Rezzes = new List<int>();
                     Vector3 OtherFaceCoord = new Vector3(InMapSizes.x - CurrentEcks, CurrentWhy);
                     int OtherFaceID = GetCellIDFromCoordinate(OtherFaceCoord, VSiteKDTree, SiteQuery, ref Rezzes);
@@ -1255,7 +1291,7 @@ namespace ProceduralWorlds
                 }
                 else if (CurrentEcks >= InMapSizes.x)
                 {
-                    Debug.Log("CurrentEcks is Map Width");
+                    //Debug.Log("CurrentEcks is Map Width");
                     for (int j = InBaseCellCount; j < InVor.Faces.Count; j++)
                     {
                         var OtherFace = InVor.Faces[j];
