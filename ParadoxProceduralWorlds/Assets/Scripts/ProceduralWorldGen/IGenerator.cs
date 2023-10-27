@@ -8,6 +8,6 @@ public interface IGeneratorSettings
 
 public interface IGenerator
 {
-    IGraphMap Generate(IGeneratorSettings InSettings);
-    IGraphMap Generate(IGeneratorSettings InSettings, IGraphMap InGraphMap);
+	IGraphMap Generate(IGeneratorSettings InSettings);
+	IGraphMap Generate(IGeneratorSettings InSettings, IGraphMap InGraphMap);
 }
