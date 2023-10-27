@@ -13,7 +13,7 @@ public interface IMapCell
     List<IMapCell> GetNeighbours(bool bIsWrappableMap = false);
 }
 
-public interface IMapGraph
+public interface IGraphMap
 {
     int GetMapCellCount();
     List<IMapCell> GetMapCells();

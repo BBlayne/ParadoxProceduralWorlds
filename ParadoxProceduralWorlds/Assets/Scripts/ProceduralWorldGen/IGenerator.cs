@@ -1,7 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
 
+public interface IGeneratorSettings
+{
+
+}
+
 public interface IGenerator
 {
-    IMapGraph Generate();
+    IGraphMap Generate(IGeneratorSettings InSettings);
+    IGraphMap Generate(IGeneratorSettings InSettings, IGraphMap InGraphMap);
 }

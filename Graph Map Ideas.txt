@@ -1,0 +1,30 @@
+A graph based map is made up of nodes or cells. 
+
+
+Delaunay Graph
+Voronoi Graph 
+
+DelaunayFactory
+
+VoronoiFactory
+
+The delaunay and voronoi maps are mainly a means to an end; we want at the end 
+the barycentric dual mesh with a convenient API to do computations on without 
+having to constantly throw away and redo work.
+
+// Blobs
+
+Int Array of Cells, i.e: Cells[...]
+
+CellGraph
+
+A cell should have, 
+	a list of neighbouring cells.
+	it's id.
+	some payload of data to be filled later (terrain type, etc).
+	a list of surrounding edges. // may not match list of neighbours.
+	a centroid i.e the location of its center of mass. 
+	
+It should be possible for a cell on an edge of the map to connect to a cell 
+at the opposite adjacent edge of the map. 
+
