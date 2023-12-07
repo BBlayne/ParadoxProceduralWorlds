@@ -12,6 +12,9 @@ using TMesh = TriangleNet.Mesh;
 using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
 using TFace = TriangleNet.Topology.DCEL.Face;
 using TQualityOptions = TriangleNet.Meshing.QualityOptions;
+using Jobberwocky.TriangleNet.Topology;
+using TSubSegment = TriangleNet.Topology.SubSegment;
+using TOSub = TriangleNet.Topology.Osub;
 
 // Design Notes
 /*
@@ -260,6 +263,8 @@ namespace ProceduralWorlds
 			GenerateSiteDistribution();
 			TMesh Triangulation = GenerateDelaunayTriangulation(InitialSites, 2);
 			Triang = Triangulation;
+
+			DrawDebugEdgesFromTMesh(Triangulation);
 
 			Mesh TriangUnityMesh = GenerateUnityMesh(Triangulation);
 			RenderTexture TriangGraphRTex = RenderPolygonalWireframeMap(TriangUnityMesh, null, TextureGenerator.GetUnlitTextureMaterial(), Color.white);
@@ -1314,6 +1319,52 @@ namespace ProceduralWorlds
 			}
 
 			return FaceEdges;
+		}
+
+		void DrawDebugEdgesFromTMesh(TMesh InTMesh)
+		{
+			int TriangleCount = InTMesh.Triangles.Count;
+			int SegmentCount = InTMesh.Segments.Count;
+			TSubSegment[] Segments = new TSubSegment[SegmentCount];
+			InTMesh.Segments.CopyTo(Segments, 0);
+			int SubSegmentCount = InTMesh.subsegs.Count;
+
+			int VertexCount = InTMesh.Vertices.Count;
+			TVertex[] Vertices = new TVertex[VertexCount];
+			InTMesh.Vertices.CopyTo(Vertices, 0);
+
+			Debug.Log("TriangleCount: " + TriangleCount + ", SegmentCount: " + SegmentCount + ", SubSegmentCount: " + SubSegmentCount);
+
+			// Presumably the Segments refer to the boundary edges of the triangulation? Or happy accident?
+			/*
+			for (int i = 0; i < SegmentCount; i++)
+			{
+				if (Segments[i] != null)
+				{
+					if (Vertices[Segments[i].P0] != null)
+					{
+						Debug.LogFormat("VertexP0({0}): ({1},{2})", Vertices[Segments[i].P0].ID, Vertices[Segments[i].P0].X, Vertices[Segments[i].P0].Y);
+					}
+					else
+					{
+						Debug.Log("Vertex P0 with ID: " + Segments[i].P0 + ", is null.");
+					}
+
+					if (Vertices[Segments[i].P1] != null)
+					{
+						Debug.LogFormat("VertexP1({0}): ({1},{2})", Vertices[Segments[i].P1].ID, Vertices[Segments[i].P1].X, Vertices[Segments[i].P1].Y);
+					}
+					else
+					{
+						Debug.Log("Vertex P1 with ID: " + Segments[i].P1 + ", is null.");
+					}
+				}
+				else
+				{
+					Debug.Log("Segment at: " + i + ", is null.");
+				}
+			}
+			*/
 		}
 	}
 }
