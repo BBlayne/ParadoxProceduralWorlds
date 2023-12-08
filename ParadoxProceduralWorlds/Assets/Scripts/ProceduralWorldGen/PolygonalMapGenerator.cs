@@ -15,6 +15,7 @@ using TQualityOptions = TriangleNet.Meshing.QualityOptions;
 using Jobberwocky.TriangleNet.Topology;
 using TSubSegment = TriangleNet.Topology.SubSegment;
 using TOSub = TriangleNet.Topology.Osub;
+using TTriangle = TriangleNet.Topology.Triangle;
 
 // Design Notes
 /*
@@ -1333,7 +1334,40 @@ namespace ProceduralWorlds
 			TVertex[] Vertices = new TVertex[VertexCount];
 			InTMesh.Vertices.CopyTo(Vertices, 0);
 
+			TTriangle[] triangles = new TTriangle[TriangleCount];
+			InTMesh.Triangles.CopyTo(triangles, 0);
+
 			Debug.Log("TriangleCount: " + TriangleCount + ", SegmentCount: " + SegmentCount + ", SubSegmentCount: " + SubSegmentCount);
+
+			int Counter = 0;
+			int TCounter = 0;
+			for (int i = 0; i < TriangleCount; i++)
+			{
+				bool bTriangleChecksOut = true;
+				for (int j = 0; j < 3; j++)
+				{
+					if (triangles[i].GetVertex(j) == null)
+					{
+						bTriangleChecksOut = false;
+					}
+					else
+					{
+						Counter++;
+					}
+				}
+
+				if (bTriangleChecksOut)
+				{
+					TCounter++;
+				}
+				else
+				{
+					Debug.Log("Triangle w/ID: " + triangles[i].ID + ", has null vertex.");
+				}
+			}
+
+			Debug.Log(Counter + " Vertices check out.");
+			Debug.Log(TCounter + " Triangles check out.");
 
 			// Presumably the Segments refer to the boundary edges of the triangulation? Or happy accident?
 			/*

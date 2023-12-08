@@ -90,18 +90,32 @@ public class TNetTriangle
 
 	public TNetTriangle()
 	{
+		// Default Constructor creates a Dummy triangle
 		id = -1;
-		neighbours[0] = null;
-		neighbours[1] = null;
-		neighbours[2] = null;
+
+		neighbours[0].Triangle = this;
+		neighbours[1].Triangle = this;
+		neighbours[2].Triangle = this;
 	}
 
 	public TNetTriangle(TTriangle InOldTriangle, TNetVertex[] InAllVertices)
 	{
 		id = InOldTriangle.ID;
-		Vertices[0] = InAllVertices[InOldTriangle.GetVertexID(0)];
-		Vertices[1] = InAllVertices[InOldTriangle.GetVertexID(1)];
-		Vertices[2] = InAllVertices[InOldTriangle.GetVertexID(2)];
+
+		if (InOldTriangle.GetVertexID(0) >= 0)
+		{
+			Vertices[0] = InAllVertices[InOldTriangle.GetVertexID(0)];
+		}
+
+		if (InOldTriangle.GetVertexID(1) >= 0)
+		{
+			Vertices[1] = InAllVertices[InOldTriangle.GetVertexID(1)];
+		}
+
+		if (InOldTriangle.GetVertexID(2) >= 0)
+		{
+			Vertices[2] = InAllVertices[InOldTriangle.GetVertexID(2)];
+		}
 	}
 
 	public TNetVertex GetVertex(int InIndex)
@@ -126,28 +140,35 @@ public class TNetTriangle
 	public void SetNeighbours(TTriangle[] InOldTriangles, TNetOTriangle[] InOldOTriangles)
 	{
 		Neighbours[0] = InOldOTriangles[InOldTriangles[id].neighbors[0].Triangle.ID];
-		Neighbours[0].SetOrientation(0);
+		Neighbours[0].Orientation = 0;
 		Neighbours[1] = InOldOTriangles[InOldTriangles[id].neighbors[1].Triangle.ID];
-		Neighbours[1].SetOrientation(1);
+		Neighbours[1].Orientation = 1;
 		Neighbours[2] = InOldOTriangles[InOldTriangles[id].neighbors[2].Triangle.ID];
-		Neighbours[2].SetOrientation(2);
+		Neighbours[2].Orientation = 2;
 	}
 }
 
 // Oriented Triangle
-public class TNetOTriangle
+public struct TNetOTriangle
 {
-	TNetTriangle TheTriangle;
-	int Orientation; // 0,1, or 2
+	TNetTriangle triangle;
+	int orientation; // 0,1, or 2
 
-	public TNetOTriangle(TNetTriangle InOriginalTri)
-	{
-		TheTriangle = InOriginalTri;
+	public TNetTriangle Triangle 
+	{ 
+		get => triangle; 
+		set => triangle = value;
 	}
 
-	public void SetOrientation(int InOrient)
+	public int Orientation
 	{
-		Orientation = InOrient;
+		get => orientation;
+		set => orientation = value;
+	}
+
+	public void Init(TNetTriangle InOriginalTri)
+	{
+		triangle = InOriginalTri;
 	}
 }
 
@@ -379,7 +400,7 @@ public class TriangleNetTriangulator : ITriangulator
 
 		int NumTNetTriangles = TheTriangulation.Triangles.Count;
 		TNetTriangle[] TNetTriangles = new TNetTriangle[NumTNetTriangles];
-		TNetOTriangle[] TNetOTriangles = new TNetOTriangle[NumTNetTriangles];
+		TNetOTriangle[] TNetOrientedTriangles = new TNetOTriangle[NumTNetTriangles];
 		TTriangle[] TTriangles = new TTriangle[NumTNetTriangles];
 		TheTriangulation.Triangles.CopyTo(TTriangles, 0);
 
@@ -388,12 +409,12 @@ public class TriangleNetTriangulator : ITriangulator
 		for (int i = 0; i < NumTNetTriangles; i++)
 		{
 			TNetTriangles[i] = new TNetTriangle(TTriangles[i], TNetVertices);
-			TNetOTriangles[i] = new TNetOTriangle(TNetTriangles[i]);
+			TNetOrientedTriangles[i].Init(TNetTriangles[i]);
 		}
 
 		for (int i = 0; i < NumTNetTriangles; i++)
 		{
-			TNetTriangles[i].SetNeighbours(TTriangles, TNetOTriangles);
+			TNetTriangles[i].SetNeighbours(TTriangles, TNetOrientedTriangles);
 		}
 
 		int NumSegments = TheTriangulation.Segments.Count;
