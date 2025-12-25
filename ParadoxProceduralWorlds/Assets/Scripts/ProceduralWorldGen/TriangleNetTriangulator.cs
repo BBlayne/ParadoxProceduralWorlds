@@ -322,6 +322,10 @@ public class TriangleNetTriangulator : ITriangulator
 		get => TheVoronoiDiagram;
 	}
 
+	IGraphMap ITriangulator.TriangulatedGraph => throw new System.NotImplementedException();
+
+	IGraphMap ITriangulator.VoronoiGraph => throw new System.NotImplementedException();
+
 	public TriangleNetTriangulator(TNetConfig InTriNetConfig)
 	{
 		TheTriangleConfiguration = InTriNetConfig;
@@ -419,5 +423,15 @@ public class TriangleNetTriangulator : ITriangulator
 
 		int NumSegments = TheTriangulation.Segments.Count;
 		TNetEdge[] TNetEdges = new TNetEdge[NumSegments];
+	}
+
+	IGraphMap ITriangulator.GenerateTriangulatedGraph()
+	{
+		throw new System.NotImplementedException();
+	}
+
+	IGraphMap ITriangulator.GenerateVoronoiGraph(bool IsBounded)
+	{
+		throw new System.NotImplementedException();
 	}
 }

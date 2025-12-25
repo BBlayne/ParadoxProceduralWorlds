@@ -13,5 +13,8 @@ using UnityEngine;
 
 public interface ITriangulator
 {
-
+	public IGraphMap TriangulatedGraph {  get; }
+	public IGraphMap VoronoiGraph { get; }
+	public IGraphMap GenerateTriangulatedGraph();
+	public IGraphMap GenerateVoronoiGraph(bool IsBounded = true);
 }
