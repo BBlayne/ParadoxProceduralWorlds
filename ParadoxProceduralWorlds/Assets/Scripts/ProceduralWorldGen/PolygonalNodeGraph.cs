@@ -85,6 +85,7 @@ public class DVertex : VertexBase, INode
 	}
 }
 
+// test comment
 public class VHalfEdge : INodeEdge
 {
 	public int ID { get; set; }
