@@ -1,25 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static UnityEngine.Rendering.RayTracingAccelerationStructure;
 
 public class PolygonalNodeGraphGeneratorSettings : IGeneratorSettings
 {
-	public string SeedString = "Blayne";
-	[Range(10, 60)]
-	public int NumPoissonSamples = 30;
+	public SiteGeneratorConfig SiteGenerationConfig { get; set; }
 
-	[Range(1, 100)]
-	public Vector2Int Padding = new Vector2Int(10, 10);
-
-	[Range(128, 5000)]
-	public Vector2Int MapSize = new Vector2Int();
-
-	public List<Vector3> InitialSites = new List<Vector3>();
-
-	[Range(0, 20)]
-	public int NumSmoothingIterations = 10;
-
-	public ESiteDistribution SiteDistributionMode { get; set; } = ESiteDistribution.RANDOM_MIRRORED;
+	public TriangulationConfig TriangulationConfiguration { get; set; }
 }
 
 public class PolygonalNodeGraphGenerator : IGenerator<TNetNodeGraphFactory, TriangleNetTriangulator>
@@ -28,28 +16,33 @@ public class PolygonalNodeGraphGenerator : IGenerator<TNetNodeGraphFactory, Tria
 
 	public PolygonalNodeGraphGeneratorSettings MapSettings { get; set; }
 
-	SiteGenerator SiteGen = new SiteGenerator();
+	public SiteGenerator SiteGen { get; private set; }
+
+	public SiteGeneratorConfig SiteConfig { get; set; }
+
+	public SiteData GeneratedSiteData { get; private set; }
 
 	public PolygonalNodeGraphGenerator()
 	{
+		NodeGraphFactory = new TNetNodeGraphFactory();
+		SiteGen = new SiteGenerator();
+		SiteConfig = new SiteGeneratorConfig();
+		GeneratedSiteData = new SiteData();
 	}
 
 	public void Init()
 	{
-		SiteGen.MapDimensions = MapSettings.MapSize;
-		SiteGen.MapPadding = MapSettings.Padding;
-		SiteGen.InitialSites = MapSettings.InitialSites;
-		SiteGen.SiteDistributionMode = MapSettings.SiteDistributionMode;
+		NodeGraphFactory.Configuration = MapSettings.TriangulationConfiguration;
+		NodeGraphFactory.GeneratorConfig = MapSettings.SiteGenerationConfig;
 
-		TriangulationConfig Configuration = new TriangulationConfig();
-		Configuration.NumSmoothingIterations = MapSettings.NumSmoothingIterations;
+		SiteGen.Config = SiteConfig;
+		SiteGen.Init();
 
-		SiteData GeneratedData = GenerateSites(MapSettings.NumPoissonSamples);
-		Configuration.Sites = GeneratedData.GeneratedSites;
-		Configuration.IsConforming = true;
+		GeneratedSiteData = SiteGen.GenerateSiteDistribution();
 
-		NodeGraphFactory.Configuration = Configuration;
-		NodeGraphFactory.GeneratedSites = GeneratedData;
+		NodeGraphFactory.GeneratedSites = GeneratedSiteData;
+
+		NodeGraphFactory.Init();
 	}
 
 	public INodeGraph Generate()

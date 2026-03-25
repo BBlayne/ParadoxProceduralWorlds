@@ -18,7 +18,7 @@ public class WorldGeneratorEditor : Editor
         {
             if (worldGen != null)
             {
-                //worldGen.GenerateWorld();
+                worldGen.GenerateWorld2();
             }
         }
     }

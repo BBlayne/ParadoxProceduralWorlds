@@ -31,13 +31,10 @@ public struct TriangulationConfig : ITriangulationConfig
 
 	public Vector2Int MapDimensions { get; set; }
 
-	public List<Vector3> Sites { get; set; }
-
 	public TriangulationConfig(bool InIsConformingDelaunay, int InSmoothingIterations)
 	{
 		IsConforming = InIsConformingDelaunay;
 		NumSmoothingIterations = InSmoothingIterations;
-		Sites = new List<Vector3>();
 		MapDimensions = new Vector2Int();
 	}
 }

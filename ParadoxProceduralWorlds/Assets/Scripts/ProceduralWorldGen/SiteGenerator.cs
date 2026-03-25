@@ -12,7 +12,7 @@ public enum ESiteDistribution
 
 public struct SiteGeneratorConfig
 {
-	public ESiteDistribution Distribution { get; set; }
+	public ESiteDistribution SiteDistributionMode { get; set; }
 	public Vector2Int MapDimensions { get; set; }
 
 	public List<Vector3> InitialSites { get; set; }
@@ -20,6 +20,12 @@ public struct SiteGeneratorConfig
 	public Vector2Int MapPadding { get; set; }
 
 	public int TargetNumSites { get; set; }	
+
+	public string SeedString { get; set; }
+
+	public int NumPoissonSamples { get; set; }
+
+	public bool UseRandomSeed { get; set; }
 }
 
 public struct SiteData
@@ -37,40 +43,36 @@ public struct SiteData
 
 public class SiteGenerator
 {
-	public ESiteDistribution SiteDistributionMode { get; set; }
-	public Vector2Int MapDimensions { get; set; }
-
-	public List<Vector3> InitialSites { get; set; }
-
-	public Vector2Int MapPadding { get; set; }
-
-	public int TargetNumSites { get; set; }
-
-	public List<Vector3> GeneratedSites {  get; private set; }
+	public SiteGeneratorConfig Config { get; set; }
 
 	public SiteData GeneratedData;
 
+	System.Random PRNG = null;
+
+	string seed = "";
+
 	public SiteGenerator()
 	{
-		MapDimensions = new Vector2Int(512, 256);
-		SiteDistributionMode = ESiteDistribution.RANDOM_MIRRORED;
-		MapPadding = new Vector2Int(25, 25);
-		TargetNumSites = 100;
+		Config = new SiteGeneratorConfig();
 		GeneratedData = new SiteData();
 	}
 
-	public void Init(SiteGeneratorConfig InConfig)
+	public void Init()
 	{
-		SiteDistributionMode = InConfig.Distribution;
-		MapDimensions = InConfig.MapDimensions;
-		InitialSites = InConfig.InitialSites;
-		MapPadding = InConfig.MapPadding;
-		TargetNumSites = InConfig.TargetNumSites;
+		seed = Config.SeedString;
+		if (Config.UseRandomSeed)
+		{
+			seed = System.DateTime.Now.Ticks.ToString();
+		}
+
+		PRNG = new System.Random(seed.GetHashCode());
+
+		Debug.Log("Initializing PRNG with string: " + seed + ", and hashcode: " + seed.GetHashCode());
 	}
 
 	public SiteData GenerateSiteDistribution()
 	{
-		switch (SiteDistributionMode) 
+		switch (Config.SiteDistributionMode) 
 		{
 			case ESiteDistribution.RANDOM:
 				return GenerateRandomSites();
@@ -90,15 +92,22 @@ public class SiteGenerator
 		List<Vector3> LeftSites = new List<Vector3>();
 		List<Vector3> RightSites = new List<Vector3>();
 		Dictionary<int, int> EdgeMap = new Dictionary<int, int>();
-		List<Vector3> Sites = MapUtils.GenerateRandomPointsMirrored2D(
-			TargetNumSites, MapDimensions, MapPadding.x, ref LeftSites, ref RightSites, ref EdgeMap);
+		List<Vector3> Sites = MapUtils.GenerateRandomPointsMirrored2D
+		(
+			Config.TargetNumSites, 
+			Config.MapDimensions, 
+			Config.MapPadding.x, 
+			ref LeftSites, 
+			ref RightSites, 
+			ref EdgeMap
+		);
 
 		GeneratedData.GeneratedLeftSites = LeftSites;
 		GeneratedData.GeneratedRightSites = RightSites;
 		GeneratedData.SiteEdgeMapping = EdgeMap;
 		GeneratedData.GeneratedSites = Sites;
 
-		foreach (var elem in InitialSites)
+		foreach (var elem in Config.InitialSites)
 		{
 			GeneratedData.GeneratedSites.Add(elem);
 		}
@@ -108,7 +117,12 @@ public class SiteGenerator
 
 	public SiteData GenerateRandomSites()
 	{
-		List<Vector3> Sites = MapUtils.GenerateRandomPoints2D(TargetNumSites, MapDimensions, MapPadding.x);
+		List<Vector3> Sites = MapUtils.GenerateRandomPoints2D
+		(
+			Config.TargetNumSites, 
+			Config.MapDimensions, 
+			Config.MapPadding.x
+		);
 		GeneratedData.GeneratedSites = Sites;
 
 		return GeneratedData;
@@ -116,10 +130,20 @@ public class SiteGenerator
 
 	public SiteData GeneratePoissonDistributedSites()
 	{
-		float Radius = MapUtils.DetermineRadiusForPoissonDisc(MapDimensions, TargetNumSites);
+		float Radius = MapUtils.DetermineRadiusForPoissonDisc
+		(
+			Config.MapDimensions, 
+			Config.TargetNumSites
+		);
+
 		List<Vector3> Sites = MapUtils.GetPoissonDistributedPoints2D
 		(
-			MapDimensions, Radius, TargetNumSites, MapPadding.x, InitialSites, TargetNumSites * 10
+			Config.MapDimensions, 
+			Radius, 
+			Config.TargetNumSites, 
+			Config.MapPadding.x, 
+			Config.InitialSites, 
+			Config.TargetNumSites * 10
 		);
 
 		GeneratedData.GeneratedSites = Sites;
@@ -129,10 +153,15 @@ public class SiteGenerator
 
 	public SiteData GenerateMirroredPoissonDistributedSites()
 	{
-		float Radius = MapUtils.DetermineRadiusForPoissonDisc(MapDimensions, TargetNumSites);
+		float Radius = MapUtils.DetermineRadiusForPoissonDisc(Config.MapDimensions, Config.TargetNumSites);
 		List<Vector3> Sites =MapUtils.GetPoissonDistributedPoints2D
 		(
-			MapDimensions, Radius, TargetNumSites, MapPadding.x, InitialSites, TargetNumSites * 10
+			Config.MapDimensions, 
+			Radius, 
+			Config.TargetNumSites, 
+			Config.MapPadding.x, 
+			Config.InitialSites, 
+			Config.TargetNumSites * 10
 		);
 
 		GeneratedData.GeneratedSites = Sites;

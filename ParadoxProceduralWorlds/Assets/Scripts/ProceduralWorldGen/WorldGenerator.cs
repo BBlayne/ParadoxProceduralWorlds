@@ -163,6 +163,8 @@ public class WorldGenerator : MonoBehaviour
 		bool IsConformingDelaunay = true;
 		Vector2Int MapPadding = new Vector2Int(25, 25);
 		int TargetNumberOfCells = 100;
+		int NumPoissonSamples = 30;
+		string RandomSeedString = "Blayne";
 		ESiteDistribution SiteDistributionMode = ESiteDistribution.RANDOM_MIRRORED;
 		List<Vector3> ListOfInitialSites = new List<Vector3>();
 		ListOfInitialSites.Add(new Vector3(0, 0, 0));
@@ -170,32 +172,32 @@ public class WorldGenerator : MonoBehaviour
 		ListOfInitialSites.Add(new Vector3(0, MaxHeight, 0));
 		ListOfInitialSites.Add(new Vector3(MaxWidth, 0, 0));
 
-		TNetNodeGraphFactory NodeGraphFactory = new TNetNodeGraphFactory();
+		PolygonalNodeGraphGenerator PolygonalGraphGenerator = new PolygonalNodeGraphGenerator();
+		PolygonalNodeGraphGeneratorSettings PolygonalGraphSettings = new PolygonalNodeGraphGeneratorSettings();
+
 		TriangulationConfig triangulationConfig = new TriangulationConfig();
 		triangulationConfig.IsConforming = IsConformingDelaunay;
 		triangulationConfig.NumSmoothingIterations = NumOfSmoothingIterations;
 		triangulationConfig.MapDimensions = MapDimensions;
 
-		SiteGenerator SiteGen = new SiteGenerator();
 		SiteGeneratorConfig siteGeneratorConfig = new SiteGeneratorConfig();
-		siteGeneratorConfig.Distribution = SiteDistributionMode;
+
+		siteGeneratorConfig.SiteDistributionMode = SiteDistributionMode;
 		siteGeneratorConfig.MapPadding = MapPadding;
 		siteGeneratorConfig.TargetNumSites = TargetNumberOfCells;
 		siteGeneratorConfig.MapDimensions = triangulationConfig.MapDimensions;
 		siteGeneratorConfig.InitialSites = ListOfInitialSites;
+		siteGeneratorConfig.NumPoissonSamples = NumPoissonSamples;
+		siteGeneratorConfig.SeedString = RandomSeedString;
+		siteGeneratorConfig.UseRandomSeed = true;
 
-		SiteGen.Init(siteGeneratorConfig);
+		PolygonalGraphSettings.TriangulationConfiguration = triangulationConfig;
+		PolygonalGraphSettings.SiteGenerationConfig = siteGeneratorConfig;
+		PolygonalGraphGenerator.MapSettings = PolygonalGraphSettings;
+		PolygonalGraphGenerator.SiteConfig = siteGeneratorConfig;
+		PolygonalGraphGenerator.Init();
 
-		SiteData generatedSiteData = SiteGen.GenerateSiteDistribution();
-		triangulationConfig.Sites = generatedSiteData.GeneratedSites;
-
-		NodeGraphFactory.GeneratedSites = generatedSiteData;
-		NodeGraphFactory.Configuration = triangulationConfig;
-		NodeGraphFactory.GeneratorConfig = siteGeneratorConfig;
-
-		NodeGraphFactory.Init();
-
-		PolygonalNodeGraph nodeGraph = NodeGraphFactory.GenerateNodeGraph() as PolygonalNodeGraph;
+		PolygonalNodeGraph nodeGraph = PolygonalGraphGenerator.Generate() as PolygonalNodeGraph;
 
 		Mesh VorGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI);
 		Mesh TriGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.DELAUNAY);
