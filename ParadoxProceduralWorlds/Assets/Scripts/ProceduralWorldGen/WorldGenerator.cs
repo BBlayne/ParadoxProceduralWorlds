@@ -146,7 +146,69 @@ public class WorldGenerator : MonoBehaviour
 
 		_oldWorldSettings = worldSettings;
 
-		GenerateWorld();
+		//GenerateWorld();
+
+		GenerateWorld2();
+	}
+
+	public void GenerateWorld2()
+	{
+		ResetRtx(PolyMapRT);
+
+		// Initial parameters for testing
+		int MaxWidth = 512;
+		int MaxHeight = 512;
+		Vector2Int MapDimensions = new Vector2Int(MaxWidth, MaxHeight);
+		int NumOfSmoothingIterations = 10;
+		bool IsConformingDelaunay = true;
+		Vector2Int MapPadding = new Vector2Int(25, 25);
+		int TargetNumberOfCells = 100;
+		ESiteDistribution SiteDistributionMode = ESiteDistribution.RANDOM_MIRRORED;
+		List<Vector3> ListOfInitialSites = new List<Vector3>();
+		ListOfInitialSites.Add(new Vector3(0, 0, 0));
+		ListOfInitialSites.Add(new Vector3(MaxWidth, MaxHeight, 0));
+		ListOfInitialSites.Add(new Vector3(0, MaxHeight, 0));
+		ListOfInitialSites.Add(new Vector3(MaxWidth, 0, 0));
+
+		TNetNodeGraphFactory NodeGraphFactory = new TNetNodeGraphFactory();
+		TriangulationConfig triangulationConfig = new TriangulationConfig();
+		triangulationConfig.IsConforming = IsConformingDelaunay;
+		triangulationConfig.NumSmoothingIterations = NumOfSmoothingIterations;
+		triangulationConfig.MapDimensions = MapDimensions;
+
+		SiteGenerator SiteGen = new SiteGenerator();
+		SiteGeneratorConfig siteGeneratorConfig = new SiteGeneratorConfig();
+		siteGeneratorConfig.Distribution = SiteDistributionMode;
+		siteGeneratorConfig.MapPadding = MapPadding;
+		siteGeneratorConfig.TargetNumSites = TargetNumberOfCells;
+		siteGeneratorConfig.MapDimensions = triangulationConfig.MapDimensions;
+		siteGeneratorConfig.InitialSites = ListOfInitialSites;
+
+		SiteGen.Init(siteGeneratorConfig);
+
+		SiteData generatedSiteData = SiteGen.GenerateSiteDistribution();
+		triangulationConfig.Sites = generatedSiteData.GeneratedSites;
+
+		NodeGraphFactory.GeneratedSites = generatedSiteData;
+		NodeGraphFactory.Configuration = triangulationConfig;
+		NodeGraphFactory.GeneratorConfig = siteGeneratorConfig;
+
+		NodeGraphFactory.Init();
+
+		PolygonalNodeGraph nodeGraph = NodeGraphFactory.GenerateNodeGraph() as PolygonalNodeGraph;
+
+		Mesh VorGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI);
+		Mesh TriGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.DELAUNAY);
+
+		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, VorGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		SaveMapAsPNG("TestVoronoiNodeGraph_RTex", VoronoiGraphRTex);
+
+		RenderTexture TriangleGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, TriGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		SaveMapAsPNG("TestTriangleNodeGraph_RTex", TriangleGraphRTex);
+
+		PolyMapRT = VoronoiGraphRTex;
+
+		UpdateMapDisplay(PolyMapRT, MapDimensions);
 	}
 
 	public void GenerateWorld()
@@ -154,7 +216,7 @@ public class WorldGenerator : MonoBehaviour
 		ResetRtx(PolyMapRT);
 
 		PolyMapGen = new ProceduralWorlds.PolygonalMapGenerator(SeedString, TargetNumberOfCells);
-		PolyMapGen.SetDistributionMode(ProceduralWorlds.ESiteDistribution.RANDOM_MIRRORED);
+		PolyMapGen.SetDistributionMode(ESiteDistribution.RANDOM_MIRRORED);
 		PolyMapGen.SetPadding(MapPadding);
 		Vector2Int WorldSizes = new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight);
 		PolyMapGen.MapDimensions = WorldSizes;
@@ -299,7 +361,7 @@ public class WorldGenerator : MonoBehaviour
 
 		// Get Initial Sample Sites either Randomly or via Poisson Disc Sampling
 		int PoissonRadius = MapUtils.DetermineRadiusForPoissonDisc(InWorldSizes, InNumPlates);
-		ProceduralWorlds.ESiteDistribution PlateSiteDistribution = ProceduralWorlds.ESiteDistribution.RANDOM;
+		ESiteDistribution PlateSiteDistribution = ESiteDistribution.RANDOM;
 		List<Vector3> InitialSamplePoints = MapUtils.GenerateSiteDistribution(
 			PlateSiteDistribution,
 			InNumPlates,

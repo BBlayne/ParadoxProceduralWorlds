@@ -27,13 +27,6 @@ using TTriangle = TriangleNet.Topology.Triangle;
  */
 namespace ProceduralWorlds
 {
-	public enum ESiteDistribution
-	{
-		RANDOM,
-		POISSON,
-		RANDOM_MIRRORED
-	}
-
 	public enum ECellColour
 	{
 		RANDOM,
@@ -150,10 +143,13 @@ namespace ProceduralWorlds
 
 		public void GenerateSiteDistribution()
 		{
+			List<Vector3> LeftSites = new List<Vector3>();
+			List<Vector3> RightSites = new List<Vector3>();
+			Dictionary<int, int> SiteMapping = new Dictionary<int, int>();
 			switch (SiteDistributionMode)
 			{
 				case ESiteDistribution.RANDOM_MIRRORED:
-					InitialSites = MapUtils.GenerateRandomPointsMirrored2D(NumberOfTargetCells, MapDimensions, MapPadding).ToArray();
+					InitialSites = MapUtils.GenerateRandomPointsMirrored2D(NumberOfTargetCells, MapDimensions, MapPadding, ref LeftSites, ref RightSites, ref SiteMapping).ToArray();
 					break;
 				case ESiteDistribution.RANDOM:
 				default:

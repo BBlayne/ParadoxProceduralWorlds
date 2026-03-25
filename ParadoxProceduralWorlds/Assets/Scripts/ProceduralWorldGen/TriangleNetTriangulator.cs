@@ -1,22 +1,22 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using TriangleNet.Geometry;
+using TriangleNet.Topology;
+using TriangleNet.Voronoi;
 using UnityEngine;
-using TMesh = TriangleNet.Mesh;
-using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
+using TConstraintOptions = TriangleNet.Meshing.ConstraintOptions;
 using TEdge = TriangleNet.Geometry.Edge;
 using TFace = TriangleNet.Topology.DCEL.Face;
-using TQualityOptions = TriangleNet.Meshing.QualityOptions;
-using TVertex = TriangleNet.Geometry.Vertex;
-using TPolygon = TriangleNet.Geometry.Polygon;
-using TTriangle = TriangleNet.Topology.Triangle;
-using TSubSegment = TriangleNet.Topology.SubSegment;
-
+using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
+using TMesh = TriangleNet.Mesh;
 // The TriangleNet Oriented Triangle
 using TOTriangle = TriangleNet.Topology.Otri;
-using TriangleNet.Geometry;
-using TConstraintOptions = TriangleNet.Meshing.ConstraintOptions;
-using TriangleNet.Voronoi;
-using TriangleNet.Topology;
+using TPolygon = TriangleNet.Geometry.Polygon;
+using TQualityOptions = TriangleNet.Meshing.QualityOptions;
+using TSubSegment = TriangleNet.Topology.SubSegment;
+using TTriangle = TriangleNet.Topology.Triangle;
+using TVertex = TriangleNet.Geometry.Vertex;
 //using DTMesh = TriangleNet.Meshing.
 
 /*
@@ -36,22 +36,9 @@ using TriangleNet.Topology;
  * 
 */
 
-public struct TNetConfig
-{
-	public bool bIsConforming;
-
-	public int SmoothingInterations;
-
-	public TNetConfig(bool bInIsConformingDelaunay, int InSmoothingIterations)
-	{
-		bIsConforming = bInIsConformingDelaunay;
-		SmoothingInterations = InSmoothingIterations;
-	}
-}
-
 public class TriangleNetTriangulator : ITriangulator
 {
-	TNetConfig TheTriangleConfiguration;
+	public TriangulationConfig Configuration { get; set; }
 
 	public TMesh Triangulation { get; private set; }
 
@@ -59,9 +46,9 @@ public class TriangleNetTriangulator : ITriangulator
 
 	public List<Vector3> Sites { get; set; }
 
-	public TriangleNetTriangulator(TNetConfig InTriNetConfig)
-	{
-		TheTriangleConfiguration = InTriNetConfig;
+	public TriangleNetTriangulator() 
+	{ 
+		
 	}
 
 	public void GenerateTriangulationFromPoints(Vector3[] InPoints)
@@ -75,6 +62,16 @@ public class TriangleNetTriangulator : ITriangulator
 	{
 		Triangulation = GenerateDelaunayMesh(InPoints);
 		TNetVoronoiTesselation = GetBoundedVoronoiFromTriangulation(Triangulation);
+
+		Vector2Int MapDimensions = Configuration.MapDimensions;
+
+		Mesh DelaunayUnityMesh = GenerateDelaunayUnityMesh(Triangulation);
+		Mesh VoronoiUnityMesh = GenerateUnityMeshFromTNetVoronoi(TNetVoronoiTesselation);
+		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, VoronoiUnityMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		MapUtils.SaveMapAsPNG("Test_VoronoiGraphRTex", VoronoiGraphRTex);
+
+		RenderTexture DelaunayGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, DelaunayUnityMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		MapUtils.SaveMapAsPNG("Test_DelaunayGraphRTex", DelaunayGraphRTex);
 	}
 
 
@@ -82,7 +79,7 @@ public class TriangleNetTriangulator : ITriangulator
 	{
 		TConstraintOptions ConstraintOptions = new TConstraintOptions()
 		{
-			ConformingDelaunay = TheTriangleConfiguration.bIsConforming
+			ConformingDelaunay = Configuration.IsConforming
 		};
 
 		TPolygon DelaneyShape = new TPolygon();
@@ -100,7 +97,7 @@ public class TriangleNetTriangulator : ITriangulator
 		TriangleNet.Smoothing.SimpleSmoother SimpleSmoother = new TriangleNet.Smoothing.SimpleSmoother();
 		if (TriangleMesh != null)
 		{
-			SimpleSmoother.Smooth(TriangleMesh, TheTriangleConfiguration.SmoothingInterations);
+			SimpleSmoother.Smooth(TriangleMesh, Configuration.NumSmoothingIterations);
 		}
 
 		return TriangleMesh;
@@ -122,5 +119,79 @@ public class TriangleNetTriangulator : ITriangulator
 		{
 			GenerateVoronoiTesselationFromPoints(Sites.ToArray());
 		}
+	}
+
+	public static Mesh GenerateUnityMeshFromTNetVoronoi(VoronoiBase InVor)
+	{
+		Mesh OutVorMesh = new Mesh();
+
+		List<IEdge> Edges = InVor.Edges.ToList();
+		List<Vector3> MeshVertices = new List<Vector3>();
+		List<int> MeshIndices = new List<int>();
+		int IndexCounter = 0;
+		for (int i = 0; i < Edges.Count; i++)
+		{
+			Vector3 PointP = new Vector3
+			(
+				(float)InVor.Vertices[Edges[i].P0].x,
+				(float)InVor.Vertices[Edges[i].P0].y,
+				0
+			);
+
+			Vector3 PointQ = new Vector3
+			(
+				(float)InVor.Vertices[Edges[i].P1].x,
+				(float)InVor.Vertices[Edges[i].P1].y,
+				0
+			);
+
+			MeshVertices.Add(PointP);
+			MeshVertices.Add(PointQ);
+			MeshIndices.Add(IndexCounter++);
+			MeshIndices.Add(IndexCounter++);
+		}
+		OutVorMesh.vertices = MeshVertices.ToArray();
+		OutVorMesh.SetIndices(MeshIndices, MeshTopology.Lines, 0);
+
+		return OutVorMesh;
+	}
+
+	public Mesh GenerateDelaunayUnityMesh(TMesh triangleNetMesh, TQualityOptions options = null)
+	{
+		if (options != null)
+		{
+			triangleNetMesh.Refine(options);
+		}
+
+		Mesh mesh = new Mesh();
+		var triangleNetVerts = triangleNetMesh.Vertices.ToList();
+
+		var triangles = triangleNetMesh.Triangles;
+
+		Vector3[] verts = new Vector3[triangleNetVerts.Count];
+		int[] trisIndex = new int[triangles.Count * 3];
+
+		for (int i = 0; i < verts.Length; i++)
+		{
+			verts[i] = new Vector3((float)triangleNetVerts[i].x, (float)triangleNetVerts[i].y, 0);
+		}
+
+		int k = 0;
+
+		foreach (var triangle in triangles)
+		{
+			for (int i = 2; i >= 0; i--)
+			{
+				trisIndex[k] = triangleNetVerts.IndexOf(triangle.GetVertex(i));
+				k++;
+			}
+		}
+
+		mesh.vertices = verts;
+		mesh.triangles = trisIndex;
+
+		mesh.RecalculateBounds();
+		mesh.RecalculateNormals();
+		return mesh;
 	}
 }

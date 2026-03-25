@@ -6,8 +6,11 @@ public interface IGeneratorSettings
 
 }
 
-public interface IGenerator
+public interface IGenerator<TNodeGrapher, TTriangulator> 
+	where TTriangulator : ITriangulator
+	where TNodeGrapher : INodeGraphFactory<TTriangulator>
 {
-	INodeGraph Generate(IGeneratorSettings InSettings);
-	INodeGraph Generate(IGeneratorSettings InSettings, INodeGraph InGraphMap);
+	TNodeGrapher NodeGraphFactory { get; set; }
+	INodeGraph Generate();
+	INodeGraph Generate(INodeGraph InGraphMap);
 }

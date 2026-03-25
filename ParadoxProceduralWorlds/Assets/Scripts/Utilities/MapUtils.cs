@@ -1,13 +1,15 @@
+using DataStructures.ViliWonka.KDTree;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using System.Linq;
 using TriangleNet.Voronoi;
-using TMesh = TriangleNet.Mesh;
-using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
+using UnityEngine;
 using TFace = TriangleNet.Topology.DCEL.Face;
+using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
+using TMesh = TriangleNet.Mesh;
 using TPoint = TriangleNet.Geometry.Point;
-using System;
+using VQuery = DataStructures.ViliWonka.KDTree.KDQuery;
 
 public class PriorityVCell : IHeapItem<PriorityVCell>
 {
@@ -226,7 +228,7 @@ public static class MapUtils
     //public static 
     public static List<Vector3> GenerateSiteDistribution
     (
-        ProceduralWorlds.ESiteDistribution InSiteDistribution,
+        ESiteDistribution InSiteDistribution,
         int InTargetNumberSites,
         Vector2Int InMapDims,
         int InPadding,
@@ -236,7 +238,7 @@ public static class MapUtils
     {
         switch (InSiteDistribution)
         {
-        case ProceduralWorlds.ESiteDistribution.POISSON:
+        case ESiteDistribution.POISSON:
             return MapUtils.GetPoissonDistributedPoints2D(
                 InMapDims,
                 InRadius,
@@ -245,7 +247,7 @@ public static class MapUtils
                 InSupplementSites,
                 InTargetNumberSites
             );
-        case ProceduralWorlds.ESiteDistribution.RANDOM:
+        case ESiteDistribution.RANDOM:
         default:
             return MapUtils.GenerateRandomPoints2D(InTargetNumberSites, InMapDims, InPadding);
         }
@@ -253,7 +255,7 @@ public static class MapUtils
 
     public static List<Vector3> GenerateSiteDistribution
     (
-        ProceduralWorlds.ESiteDistribution InSiteDistribution,
+        ESiteDistribution InSiteDistribution,
         int InTargetNumberSites,
         Vector2Int InMapDims,
         int InPadding,
@@ -262,7 +264,7 @@ public static class MapUtils
     {
         switch (InSiteDistribution)
         {
-        case ProceduralWorlds.ESiteDistribution.POISSON:
+        case ESiteDistribution.POISSON:
             return MapUtils.GetPoissonDistributedPoints2D(
                 InMapDims,
                 MapUtils.DetermineRadiusForPoissonDisc(InMapDims, InTargetNumberSites),
@@ -271,7 +273,7 @@ public static class MapUtils
                 InSupplementSites,
                 InTargetNumberSites
             );
-        case ProceduralWorlds.ESiteDistribution.RANDOM:
+        case ESiteDistribution.RANDOM:
         default:
             return MapUtils.GenerateRandomPoints2D(InTargetNumberSites, InMapDims, InPadding);
         }
@@ -393,7 +395,13 @@ public static class MapUtils
         return Points;
     }
 
-    public static List<Vector3> GenerateRandomPointsMirrored2D(int InNumPoints, Vector2Int InMapSizes, int InPadding)
+    public static List<Vector3> GenerateRandomPointsMirrored2D(
+		int InNumPoints, 
+		Vector2Int InMapSizes, 
+		int InPadding, 
+		ref List<Vector3> LeftSites, 
+		ref List<Vector3> RightSites,
+		ref Dictionary<int, int> EdgeMap)
     {
         List<Vector3> Points = new List<Vector3>();
 
@@ -401,8 +409,6 @@ public static class MapUtils
         int EdgePointsNum = Mathf.RoundToInt(EdgeWidth * InNumPoints);
         int MiddlePointsNum = InNumPoints - (EdgePointsNum * 2);
         int MaxEdgeWidth = Mathf.RoundToInt((InMapSizes.x - (2 * InPadding)) * EdgeWidth);
-
-        List<Vector3> LeftPoints = new List<Vector3>();
         for (int i = 0; i < EdgePointsNum; i++)
         {
             Vector3 Pos = new Vector3(
@@ -410,8 +416,9 @@ public static class MapUtils
                 UnityEngine.Random.Range(InPadding, InMapSizes.y - InPadding),
                 0);
 
-            LeftPoints.Add(Pos);
+            LeftSites.Add(Pos);
             Points.Add(Pos);
+			EdgeMap.Add(i, i);
         }
 
         for (int i = 0; i < MiddlePointsNum; i++)
@@ -427,11 +434,12 @@ public static class MapUtils
             );
         }
 
-        for (int i = 0; i < LeftPoints.Count; i++)
+        for (int i = 0; i < LeftSites.Count; i++)
         {
             Vector3 MirroredPos = new Vector3();
-            MirroredPos.y = LeftPoints[i].y;
-            MirroredPos.x = InMapSizes.x - LeftPoints[i].x;
+            MirroredPos.y = LeftSites[i].y;
+            MirroredPos.x = InMapSizes.x - LeftSites[i].x;
+			RightSites.Add(MirroredPos);
             Points.Add(MirroredPos);
         }
 
@@ -510,4 +518,44 @@ public static class MapUtils
         }
         return c;
     }
+
+	public static bool GetNodeIDFromCoordinate(Vector3 InPoint, KDTree InKDTree, VQuery InQuery, ref List<int> InOutResults)
+	{
+		InOutResults.Clear();
+
+		InQuery.ClosestPoint(InKDTree, InPoint, InOutResults);
+
+		if (InOutResults.Count > 0)
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	public static RenderTexture RenderPolygonalWireframeMap(Vector2Int InMapSizes, Mesh InMapMesh, Material InMeshMaterial, Color InColour, bool isBGTransparent = true)
+	{
+		RenderTexture PolyMapRT = null;
+		if (InMeshMaterial != null)
+		{
+			InMeshMaterial.SetColor("_Color", InColour);
+			PolyMapRT = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
+			PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, InMapSizes, InMeshMaterial, true, isBGTransparent);
+		}
+
+		return PolyMapRT;
+	}
+
+	public async static void SaveMapAsPNG(string InFileName, RenderTexture InTex)
+	{
+		if (InTex != null)
+		{
+			// attempting C# aync functionality
+			await TextureGenerator.SaveTextureAsPng(
+				TextureGenerator.CreateTexture2D(InTex),
+				Application.dataPath + "/../ExportedImages/",
+				InFileName + ".png"
+			);
+		}
+	}
 }

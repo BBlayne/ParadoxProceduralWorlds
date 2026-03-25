@@ -1,11 +1,24 @@
 
 
 using System.Collections.Generic;
+using UnityEditor.Timeline.Actions;
 using UnityEngine;
+
+public enum ENodeType
+{
+	None,
+	BOUNDARY
+}
+
+public enum EUnityMeshMode
+{
+	VORONOI,
+	DELAUNAY
+}
 
 public abstract class NodeBase
 {
-	public int ID { get; set; }
+	public int ID { get; set; } = -1;
 }
 
 /*
@@ -16,13 +29,26 @@ public class VCell : NodeBase, INode
 {
 	public INodeData Data { get; set; }
 
-	public DVertex Centroid {  get; set; }
+	public DVertex Centroid { get; set; }
+
+	public VHalfEdge HalfEdge { get; set; }
+
+	public VHalfEdge[] HalfEdges { get; set; }
+
+	public VVertex[] Vertices { get; set; }
 
 	public List<INode> Neighbours { get; set; }
 
 	public List<INode> GetNeighbours()
 	{
 		return Neighbours;
+	}
+
+	public ENodeType NodeType { get; set; } = ENodeType.None;
+
+	public VCell()
+	{
+		Neighbours = new List<INode>();
 	}
 }
 
@@ -35,6 +61,16 @@ public class DFace : NodeBase, INode
 	public INodeData Data { get; set; }
 
 	public VVertex Centroid {  get; set; }
+
+	public DVertex[] Vertices { get; set; }
+	public DEdge[] Edges { get; set; }
+
+	public DFace()
+	{
+		Vertices = new DVertex[3];
+		Neighbours = new List<INode>();
+		Edges = new DEdge[3];
+	}
 
 	public List<INode> Neighbours { get; set; }
 
@@ -57,13 +93,22 @@ public class VVertex : VertexBase, INode
 {
 	public INodeData Data { get; set; }
 
-	public int ID { get; set; }
+	public int ID { get; set; } = -1;
+
+	public DFace Triangle { get; set; }
+
+	public VHalfEdge Leaving {  get; set; }
 
 	public List<INode> Neighbours { get; set; }
 
 	public List<INode> GetNeighbours()
 	{
 		return Neighbours;
+	}
+
+	public VVertex()
+	{
+		Neighbours = new List<INode>();
 	}
 }
 
@@ -75,7 +120,7 @@ public class DVertex : VertexBase, INode
 {
 	public INodeData Data { get; set; }
 
-	public int ID { get; set; }
+	public int ID { get; set; } = -1;
 
 	public List<INode> Neighbours { get; set; }
 
@@ -83,29 +128,61 @@ public class DVertex : VertexBase, INode
 	{
 		return Neighbours;
 	}
+
+	public DVertex()
+	{
+		Neighbours = new List<INode>();
+	}
 }
 
 // test comment
-public class VHalfEdge : INodeEdge
+public class VHalfEdge : INodeEdge<VVertex>
 {
-	public int ID { get; set; }
+	public int ID { get; set; } = -1;
 
-	public INode Start { get; set; }
-	public INode End  { get; set; }
+	public VVertex Start { get; set; }
+	public VVertex End  { get; set; }
+
+	public VHalfEdge Next { get; set; }
+
+	public VHalfEdge Twin {  get; set; }
+	public VCell Cell { get; set; }
+	public INodeData Data { get; set; }
+	public List<INode> Neighbours { get; set; }
+
+	public VHalfEdge()
+	{
+		Start = new VVertex();
+		End = new VVertex();
+	}
+
+	public List<INode> GetNeighbours()
+	{
+		throw new System.NotImplementedException();
+	}
 }
 
-public class DEdge : INodeEdge
+public class DEdge : INodeEdge<DVertex>
 {
-	public int ID { get; set; }
+	public int ID { get; set; } = -1;
 
-	public INode Start { get; set; }
-	public INode End  { get; set; }
+	public DVertex Start { get; set; }
+	public DVertex End  { get; set; }
+	public INodeData Data { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
+	public List<INode> Neighbours { get => throw new System.NotImplementedException(); set => throw new System.NotImplementedException(); }
+
+	public List<INode> GetNeighbours()
+	{
+		throw new System.NotImplementedException();
+	}
 }
 
 public class PolygonalNodeGraph : INodeGraph
 {
 	public DVertex[] DVertices;
 	public VVertex[] VVertices;
+
+	public Vector3[] DVertexCoords;
 
 	public VCell[] Cells;
 	public DFace[] Faces;
@@ -204,5 +281,64 @@ public class PolygonalNodeGraph : INodeGraph
 			return Edges.Length;
 
 		return -1;
+	}
+
+	public Mesh GenerateUnityMeshFromGraph(EUnityMeshMode InMeshMode)
+	{
+		switch (InMeshMode) 
+		{
+			case EUnityMeshMode.VORONOI:
+				return GenerateUnityMeshFromVoronoi();
+			case EUnityMeshMode.DELAUNAY:
+				return GenerateUnityMeshFromDelaunay();
+			default:
+			return null;
+		}
+	}
+
+	private Mesh GenerateUnityMeshFromVoronoi()
+	{
+		Mesh OutMesh = new Mesh();
+
+		List<VHalfEdge> Edges = new List<VHalfEdge>(HalfEdges);
+		List<Vector3> MeshVertices = new List<Vector3>();
+		List<int> MeshIndices = new List<int>();
+		int IndexCounter = 0;
+		for (int i = 0; i < Edges.Count; i++)
+		{
+			MeshVertices.Add(Edges[i].Start.Coords);
+			MeshVertices.Add(Edges[i].End.Coords);
+			MeshIndices.Add(IndexCounter++);
+			MeshIndices.Add(IndexCounter++);
+		}
+		OutMesh.vertices = MeshVertices.ToArray();
+		OutMesh.SetIndices(MeshIndices, MeshTopology.Lines, 0);
+
+		return OutMesh;
+	}
+
+	private Mesh GenerateUnityMeshFromDelaunay()
+	{
+		Mesh OutMesh = new Mesh();
+
+		int[] trisIndex = new int[Faces.Length * 3];
+
+		int k = 0;
+
+		foreach (var triangle in Faces)
+		{
+			for (int i = 2; i >= 0; i--)
+			{
+				trisIndex[k] = triangle.Vertices[i].ID;
+				k++;
+			}
+		}
+
+		OutMesh.vertices = DVertexCoords;
+		OutMesh.triangles = trisIndex;
+
+		OutMesh.RecalculateBounds();
+		OutMesh.RecalculateNormals();
+		return OutMesh;
 	}
 }

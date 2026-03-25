@@ -8,33 +8,62 @@ public class PolygonalNodeGraphGeneratorSettings : IGeneratorSettings
 	[Range(10, 60)]
 	public int NumPoissonSamples = 30;
 
+	[Range(1, 100)]
+	public Vector2Int Padding = new Vector2Int(10, 10);
+
+	[Range(128, 5000)]
+	public Vector2Int MapSize = new Vector2Int();
+
+	public List<Vector3> InitialSites = new List<Vector3>();
+
 	[Range(0, 20)]
 	public int NumSmoothingIterations = 10;
+
+	public ESiteDistribution SiteDistributionMode { get; set; } = ESiteDistribution.RANDOM_MIRRORED;
 }
 
-public class PolygonalNodeGraphGenerator : IGenerator
+public class PolygonalNodeGraphGenerator : IGenerator<TNetNodeGraphFactory, TriangleNetTriangulator>
 {
-	INodeGraphFactory<ITriangulator> NodeGraphFactory { get; set; }
+	public TNetNodeGraphFactory NodeGraphFactory { get; set; }
+
+	public PolygonalNodeGraphGeneratorSettings MapSettings { get; set; }
+
+	SiteGenerator SiteGen = new SiteGenerator();
 
 	public PolygonalNodeGraphGenerator()
 	{
-		NodeGraphFactory = new TNetNodeGraphFactory() as INodeGraphFactory<ITriangulator>;
 	}
 
-	public INodeGraph Generate(IGeneratorSettings InSettings)
+	public void Init()
 	{
+		SiteGen.MapDimensions = MapSettings.MapSize;
+		SiteGen.MapPadding = MapSettings.Padding;
+		SiteGen.InitialSites = MapSettings.InitialSites;
+		SiteGen.SiteDistributionMode = MapSettings.SiteDistributionMode;
 
-		
+		TriangulationConfig Configuration = new TriangulationConfig();
+		Configuration.NumSmoothingIterations = MapSettings.NumSmoothingIterations;
+
+		SiteData GeneratedData = GenerateSites(MapSettings.NumPoissonSamples);
+		Configuration.Sites = GeneratedData.GeneratedSites;
+		Configuration.IsConforming = true;
+
+		NodeGraphFactory.Configuration = Configuration;
+		NodeGraphFactory.GeneratedSites = GeneratedData;
+	}
+
+	public INodeGraph Generate()
+	{
+		return NodeGraphFactory.GenerateNodeGraph();
+	}
+
+	public INodeGraph Generate(INodeGraph InGraphMap)
+	{
 		return null;
 	}
 
-	public INodeGraph Generate(IGeneratorSettings InSettings, INodeGraph InGraphMap)
+	public SiteData GenerateSites(int NumSamples)
 	{
-		return null;
-	}
-
-	public List<Vector3> GenerateSites(int NumSamples)
-	{
-		return new List<Vector3>();
+		return SiteGen.GeneratedData;
 	}
 }
