@@ -546,6 +546,23 @@ public static class MapUtils
 		return PolyMapRT;
 	}
 
+	public static RenderTexture RenderPolygonalMap(string InName, Mesh InMapMesh, Texture2D InTexture, Material InMeshMaterial, bool InIsDebug = false)
+	{
+		RenderTexture PolyMapRT = null;
+		if (InTexture != null && InMeshMaterial != null)
+		{
+			PolyMapRT = new RenderTexture(InTexture.width, InTexture.height, 0);
+			InMeshMaterial.mainTexture = InTexture;
+			PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, new Vector2Int(InTexture.width, InTexture.height), InMeshMaterial, false, false);
+			if (InIsDebug)
+			{
+				TextureGenerator.SaveMapAsPNG(InName, PolyMapRT);
+			}
+		}
+
+		return PolyMapRT;
+	}
+
 	public async static void SaveMapAsPNG(string InFileName, RenderTexture InTex)
 	{
 		if (InTex != null)

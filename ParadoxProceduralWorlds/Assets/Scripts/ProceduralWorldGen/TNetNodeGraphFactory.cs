@@ -79,8 +79,6 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 
 		Dictionary<int, Vector3> TriangleCenters = new Dictionary<int, Vector3>();
 
-		nodeGraph.DVertexCoords = new Vector3[TVertices.Length];
-
 		/*
 		 * Generate Delaunay Vertices (DVertex)
 		 *	- ID
@@ -92,6 +90,7 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 		 */
 		int NumTVertices = TVertices.Length;
 		nodeGraph.DVertices = new DVertex[NumTVertices];
+		nodeGraph.CellCoordinates = new Vector3[NumTVertices];
 		for (int i = 0; i < NumTVertices; i++)
 		{
 			TVertex TVert = TVertices[i];
@@ -99,8 +98,10 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 			nodeGraph.DVertices[i].ID = TVert.ID;
 			nodeGraph.DVertices[i].Coords = new Vector3((float)TVert.X, (float)TVert.Y, 0.0f);
 			NodeCoords.Add(nodeGraph.DVertices[i].ID, nodeGraph.DVertices[i].Coords);
-			nodeGraph.DVertexCoords[i] = nodeGraph.DVertices[i].Coords;
+			nodeGraph.CellCoordinates[i] = nodeGraph.DVertices[i].Coords;
 		}
+
+		nodeGraph.InitCellCoordinateSearchTree();
 
 		VSiteKDTree = new KDTree(NodeCoords.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToArray(), 32);
 

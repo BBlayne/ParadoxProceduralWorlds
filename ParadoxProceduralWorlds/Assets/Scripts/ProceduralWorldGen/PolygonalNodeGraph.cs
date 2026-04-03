@@ -1,8 +1,11 @@
 
 
+using DataStructures.ViliWonka.KDTree;
 using System.Collections.Generic;
 using UnityEditor.Timeline.Actions;
 using UnityEngine;
+
+using VQuery = DataStructures.ViliWonka.KDTree.KDQuery;
 
 public enum ENodeType
 {
@@ -182,17 +185,50 @@ public class PolygonalNodeGraph : INodeGraph
 	public DVertex[] DVertices;
 	public VVertex[] VVertices;
 
-	public Vector3[] DVertexCoords;
-
 	public VCell[] Cells;
 	public DFace[] Faces;
 
 	public VHalfEdge[] HalfEdges;
 	public DEdge[] Edges;
 
+	public KDTree VSiteKDTree = null;
+
+	public Vector3[] CellCoordinates;
+
+	VQuery SiteQuery = new VQuery();
+
+	List<int> CellSearchResults = new List<int>();
+
 	public PolygonalNodeGraph()
 	{
 
+	}
+
+	public void InitCellCoordinateSearchTree()
+	{
+		if (CellCoordinates == null)
+		{
+			Debug.LogError("CellCoordinates Array Not Initialized or Valid");
+			return;
+		}
+		VSiteKDTree = new KDTree(CellCoordinates, 32);
+	}
+
+	public int GetCellIDFromCoordinate(Vector3 InCoordinate)
+	{
+		if (VSiteKDTree == null)
+		{
+			return -1;
+		}
+
+		CellSearchResults.Clear();
+		if (MapUtils.GetNodeIDFromCoordinate(InCoordinate, VSiteKDTree, SiteQuery, ref CellSearchResults))
+		{
+			return CellSearchResults[0];
+		}
+
+		Debug.LogWarning("Node ID (Triangle Centroid Voronoi Vertex) not found...");
+		return -1;
 	}
 
 	public DFace GetFace(int InFaceIndex)
@@ -334,7 +370,7 @@ public class PolygonalNodeGraph : INodeGraph
 			}
 		}
 
-		OutMesh.vertices = DVertexCoords;
+		OutMesh.vertices = CellCoordinates;
 		OutMesh.triangles = trisIndex;
 
 		OutMesh.RecalculateBounds();
