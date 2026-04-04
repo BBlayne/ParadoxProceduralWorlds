@@ -54,7 +54,7 @@ namespace ProceduralWorlds
 
 		public int NumberOfTargetCells = 0;
 
-		public int MapPadding = 25;
+		public Vector2Int MapPadding = new Vector2Int(25, 25);
 
 		public bool bSaveDebugMaps = true;
 		public bool bSaveDebugIncrementalFloodFillMaps = false;
@@ -110,7 +110,7 @@ namespace ProceduralWorlds
 			InitialSites = InSites;
 		}
 
-		public void SetPadding(int InPadding)
+		public void SetPadding(Vector2Int InPadding)
 		{
 			MapPadding = InPadding;
 		}
@@ -149,11 +149,11 @@ namespace ProceduralWorlds
 			switch (SiteDistributionMode)
 			{
 				case ESiteDistribution.RANDOM_MIRRORED:
-					InitialSites = MapUtils.GenerateRandomPointsMirrored2D(NumberOfTargetCells, MapDimensions, MapPadding, ref LeftSites, ref RightSites, ref SiteMapping).ToArray();
+					InitialSites = MapUtils.GenerateRandomPointsMirrored2D(NumberOfTargetCells, MapDimensions, MapDimensions, MapPadding, ref LeftSites, ref RightSites, ref SiteMapping).ToArray();
 					break;
 				case ESiteDistribution.RANDOM:
 				default:
-					InitialSites = MapUtils.GenerateRandomPoints2D(NumberOfTargetCells, MapDimensions, MapPadding).ToArray();
+					InitialSites = MapUtils.GenerateRandomPoints2D(NumberOfTargetCells, MapDimensions, MapPadding.x).ToArray();
 					break;
 			}
 		}

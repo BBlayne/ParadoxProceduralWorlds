@@ -237,6 +237,27 @@ public static class TextureGenerator
         return outRTex;
     }
 
+	public static RenderTexture BlitPointsToRenderTexture(Vector3[] InPoints, Vector2Int InTextureSize, Material InMat, bool InIsTransparentBG)
+	{
+		RenderTexture outRTex = new RenderTexture(InTextureSize.x, InTextureSize.y, 0, RenderTextureFormat.ARGB32);
+		GL.wireframe = false;
+		Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
+		{
+			GL.Clear(true, true, InIsTransparentBG ? Color.clear : Color.black);
+
+			foreach (var p in InPoints) 
+			{
+				Rect PointRect = new Rect(p, Vector2.one);
+				Nothke.Utils.RTUtils.DrawQuad(outRTex, InMat, PointRect);
+			}
+		}
+		Nothke.Utils.RTUtils.EndRendering(outRTex);
+
+		GL.wireframe = false;
+
+		return outRTex;
+	}
+
     public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe, bool bIsTransparentBG)
     {
         RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0, RenderTextureFormat.ARGB32);

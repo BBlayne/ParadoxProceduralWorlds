@@ -397,23 +397,30 @@ public static class MapUtils
 
     public static List<Vector3> GenerateRandomPointsMirrored2D(
 		int InNumPoints, 
-		Vector2Int InMapSizes, 
-		int InPadding, 
+		Vector2Int InTextureSize,
+		Vector2Int InMapSize, // area in which points are to be distributed 0 to N
+		Vector2Int InPadding, // padding so points are a certain distance from the edge of the 'map'
 		ref List<Vector3> LeftSites, 
 		ref List<Vector3> RightSites,
 		ref Dictionary<int, int> EdgeMap)
     {
         List<Vector3> Points = new List<Vector3>();
 
-        float EdgeWidth = 0.05f;
-        int EdgePointsNum = Mathf.RoundToInt(EdgeWidth * InNumPoints);
+		int MarginX = (InTextureSize.x - InMapSize.x) / 2;
+		int MarginY = (InTextureSize.y - InMapSize.y) / 2;
+
+
+		float EdgeWidthRatio = 0.1f;
+        int EdgePointsNum = Mathf.RoundToInt(EdgeWidthRatio * InNumPoints);
         int MiddlePointsNum = InNumPoints - (EdgePointsNum * 2);
-        int MaxEdgeWidth = Mathf.RoundToInt((InMapSizes.x - (2 * InPadding)) * EdgeWidth);
-        for (int i = 0; i < EdgePointsNum; i++)
+        int EdgeWidthX = Mathf.RoundToInt((InMapSize.x * EdgeWidthRatio));
+		int EdgeWidthY = Mathf.RoundToInt((InMapSize.y * EdgeWidthRatio));
+
+		for (int i = 0; i < EdgePointsNum; i++)
         {
             Vector3 Pos = new Vector3(
-                UnityEngine.Random.Range(InPadding, MaxEdgeWidth),
-                UnityEngine.Random.Range(InPadding, InMapSizes.y - InPadding),
+                UnityEngine.Random.Range(MarginX + InPadding.x, MarginX + InPadding.x + EdgeWidthX),
+                UnityEngine.Random.Range(MarginY + InPadding.y, InTextureSize.y - MarginY - InPadding.y - EdgeWidthY),
                 0);
 
             LeftSites.Add(Pos);
@@ -427,8 +434,8 @@ public static class MapUtils
             (
                 new Vector3
                 (
-                    UnityEngine.Random.Range(InPadding + MaxEdgeWidth, InMapSizes.x - MaxEdgeWidth - InPadding),
-                    UnityEngine.Random.Range(InPadding, InMapSizes.y - InPadding),
+                    UnityEngine.Random.Range(MarginX + InPadding.x + EdgeWidthX, InTextureSize.x - MarginX - InPadding.x - EdgeWidthX),
+                    UnityEngine.Random.Range(MarginY + InPadding.y + EdgeWidthY, InTextureSize.y - MarginY - InPadding.y - EdgeWidthY),
                     0
                 )
             );
@@ -438,7 +445,7 @@ public static class MapUtils
         {
             Vector3 MirroredPos = new Vector3();
             MirroredPos.y = LeftSites[i].y;
-            MirroredPos.x = InMapSizes.x - LeftSites[i].x;
+            MirroredPos.x = InTextureSize.x - LeftSites[i].x;
 			RightSites.Add(MirroredPos);
             Points.Add(MirroredPos);
         }
@@ -531,6 +538,19 @@ public static class MapUtils
 		}
 
 		return false;
+	}
+
+	public static RenderTexture DrawPointsToRenderTexture(Vector2Int InMapSizes, Vector3[] InPoints, Material InMeshMaterial, Color InColour, bool isBGTransparent = true)
+	{
+		RenderTexture PolyMapRT = null;
+		if (InMeshMaterial != null)
+		{
+			InMeshMaterial.SetColor("_Color", InColour);
+			PolyMapRT = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
+			PolyMapRT = TextureGenerator.BlitPointsToRenderTexture(InPoints, InMapSizes, InMeshMaterial, isBGTransparent);
+		}
+
+		return PolyMapRT;
 	}
 
 	public static RenderTexture RenderPolygonalWireframeMap(Vector2Int InMapSizes, Mesh InMapMesh, Material InMeshMaterial, Color InColour, bool isBGTransparent = true)

@@ -63,14 +63,22 @@ public class TriangleNetTriangulator : ITriangulator
 		Triangulation = GenerateDelaunayMesh(InPoints);
 		TNetVoronoiTesselation = GetBoundedVoronoiFromTriangulation(Triangulation);
 
-		Vector2Int MapDimensions = Configuration.MapDimensions;
-
 		Mesh DelaunayUnityMesh = GenerateDelaunayUnityMesh(Triangulation);
 		Mesh VoronoiUnityMesh = GenerateUnityMeshFromTNetVoronoi(TNetVoronoiTesselation);
-		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, VoronoiUnityMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(
+			Configuration.TextureDimensions, 
+			VoronoiUnityMesh, 
+			TextureGenerator.GetUnlitMaterial(), 
+			Color.white
+		);
 		MapUtils.SaveMapAsPNG("Test_VoronoiGraphRTex", VoronoiGraphRTex);
 
-		RenderTexture DelaunayGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, DelaunayUnityMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		RenderTexture DelaunayGraphRTex = MapUtils.RenderPolygonalWireframeMap(
+			Configuration.TextureDimensions, 
+			DelaunayUnityMesh, 
+			TextureGenerator.GetUnlitMaterial(), 
+			Color.white
+		);
 		MapUtils.SaveMapAsPNG("Test_DelaunayGraphRTex", DelaunayGraphRTex);
 	}
 

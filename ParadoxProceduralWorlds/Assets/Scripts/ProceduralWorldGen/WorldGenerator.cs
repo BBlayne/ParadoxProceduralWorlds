@@ -80,7 +80,7 @@ public class WorldGenerator : MonoBehaviour
 	public int TargetNumberOfCells = 1000;
 
 	[Range(10, 30)]
-	public int MapPadding = 25;
+	public Vector2Int MapPadding = new Vector2Int(25, 25);
 
 	[Range(2, 40)]
 	public int NumberOfTectonicPlates = 30;
@@ -175,10 +175,10 @@ public class WorldGenerator : MonoBehaviour
 		string RandomSeedString = "Blayne";
 		ESiteDistribution SiteDistributionMode = ESiteDistribution.RANDOM_MIRRORED;
 		List<Vector3> ListOfInitialSites = new List<Vector3>();
-		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, TextureHalfPadding, 0)); // Bottom Left in Image Programs / Texture Space
-		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding, MaxHeight + TextureHalfPadding, 0)); // Top right in Image Programs / Texture Space
-		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, MaxHeight + TextureHalfPadding, 0)); // Top Left
-		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding, TextureHalfPadding, 0)); // Bottom Right
+		ListOfInitialSites.Add(new Vector3(TextureHalfPadding - 1, TextureHalfPadding - 1, 0)); // Bottom Left in Image Programs / Texture Space
+		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - 1, MaxHeight + TextureHalfPadding - 1, 0)); // Top right in Image Programs / Texture Space
+		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, MaxHeight + TextureHalfPadding - 1, 0)); // Top Left
+		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - 1, TextureHalfPadding, 0)); // Bottom Right
 
 		PolygonalNodeGraphGenerator PolygonalGraphGenerator = new PolygonalNodeGraphGenerator();
 		PolygonalNodeGraphGeneratorSettings PolygonalGraphSettings = new PolygonalNodeGraphGeneratorSettings();
@@ -186,14 +186,16 @@ public class WorldGenerator : MonoBehaviour
 		TriangulationConfig triangulationConfig = new TriangulationConfig();
 		triangulationConfig.IsConforming = IsConformingDelaunay;
 		triangulationConfig.NumSmoothingIterations = NumOfSmoothingIterations;
-		triangulationConfig.MapDimensions = RenderTextureSizes;
+		triangulationConfig.MapDimensions = MapDimensions;
+		triangulationConfig.TextureDimensions = RenderTextureSizes;
 
 		SiteGeneratorConfig siteGeneratorConfig = new SiteGeneratorConfig();
 
 		siteGeneratorConfig.SiteDistributionMode = SiteDistributionMode;
 		siteGeneratorConfig.MapPadding = MapPadding;
+		siteGeneratorConfig.TextureDimensions = RenderTextureSizes;
 		siteGeneratorConfig.TargetNumSites = TargetNumberOfCells;
-		siteGeneratorConfig.MapDimensions = triangulationConfig.MapDimensions;
+		siteGeneratorConfig.MapDimensions = MapDimensions;
 		siteGeneratorConfig.InitialSites = ListOfInitialSites;
 		siteGeneratorConfig.NumPoissonSamples = NumPoissonSamples;
 		siteGeneratorConfig.SeedString = RandomSeedString;
@@ -210,10 +212,16 @@ public class WorldGenerator : MonoBehaviour
 		Mesh VorGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI);
 		Mesh TriGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.DELAUNAY);
 
-		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(RenderTextureSizes, VorGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		Material PointDebugMaterial = new Material(TextureGenerator.GetUnlitMaterial());
+		PointDebugMaterial.SetColor(0, Color.red);
+
+		RenderTexture PointsRenderTexture = MapUtils.DrawPointsToRenderTexture(RenderTextureSizes, nodeGraph.CellCoordinates, PointDebugMaterial, Color.red, false);
+		SaveMapAsPNG("TestDelaunaySites_RTex", PointsRenderTexture);
+
+		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(RenderTextureSizes, VorGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white, false);
 		SaveMapAsPNG("TestVoronoiNodeGraph_RTex", VoronoiGraphRTex);
 
-		RenderTexture TriangleGraphRTex = MapUtils.RenderPolygonalWireframeMap(RenderTextureSizes, TriGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		RenderTexture TriangleGraphRTex = MapUtils.RenderPolygonalWireframeMap(RenderTextureSizes, TriGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.yellow, false);
 		SaveMapAsPNG("TestTriangleNodeGraph_RTex", TriangleGraphRTex);
 
 		PolyMapRT = VoronoiGraphRTex;
@@ -275,7 +283,7 @@ public class WorldGenerator : MonoBehaviour
 		(
 			PolyMapGen.MapDimensions,
 			NumTectonicPlates,
-			MapPadding,
+			MapPadding.x,
 			TheBoundedVoronoiGraph,
 			bIsRandomFloodFill
 		);
@@ -320,7 +328,7 @@ public class WorldGenerator : MonoBehaviour
 			TheBoundedVoronoiGraph,
 			WorldSizes,
 			NumberOfContinents,
-			MapPadding,
+			MapPadding.x,
 			WorldLandmassPercentage
 		);
 

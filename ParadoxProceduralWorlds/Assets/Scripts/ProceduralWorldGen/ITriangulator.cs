@@ -30,11 +30,13 @@ public struct TriangulationConfig : ITriangulationConfig
 	public int NumSmoothingIterations { get; set; }
 
 	public Vector2Int MapDimensions { get; set; }
+	public Vector2Int TextureDimensions { get; set; }
 
 	public TriangulationConfig(bool InIsConformingDelaunay, int InSmoothingIterations)
 	{
 		IsConforming = InIsConformingDelaunay;
 		NumSmoothingIterations = InSmoothingIterations;
-		MapDimensions = new Vector2Int();
+		MapDimensions = new Vector2Int(512, 512);
+		TextureDimensions = new Vector2Int(512, 512);
 	}
 }

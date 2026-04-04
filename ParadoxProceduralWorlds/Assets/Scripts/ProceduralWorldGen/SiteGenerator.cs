@@ -15,6 +15,8 @@ public struct SiteGeneratorConfig
 	public ESiteDistribution SiteDistributionMode { get; set; }
 	public Vector2Int MapDimensions { get; set; }
 
+	public Vector2Int TextureDimensions { get; set; }
+
 	public List<Vector3> InitialSites { get; set; }
 
 	public Vector2Int MapPadding { get; set; }
@@ -94,9 +96,10 @@ public class SiteGenerator
 		Dictionary<int, int> EdgeMap = new Dictionary<int, int>();
 		List<Vector3> Sites = MapUtils.GenerateRandomPointsMirrored2D
 		(
-			Config.TargetNumSites, 
+			Config.TargetNumSites,
+			Config.TextureDimensions,
 			Config.MapDimensions, 
-			Config.MapPadding.x, 
+			Config.MapPadding, 
 			ref LeftSites, 
 			ref RightSites, 
 			ref EdgeMap
