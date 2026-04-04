@@ -158,19 +158,27 @@ public class WorldGenerator : MonoBehaviour
 		// Initial parameters for testing
 		int MaxWidth = 512;
 		int MaxHeight = 512;
+
 		Vector2Int MapDimensions = new Vector2Int(MaxWidth, MaxHeight);
 		int NumOfSmoothingIterations = 10;
 		bool IsConformingDelaunay = true;
 		Vector2Int MapPadding = new Vector2Int(25, 25);
-		int TargetNumberOfCells = 100;
+
+		int TexturePadding = 50;
+		int TextureHalfPadding = TexturePadding / 2;
+		int MaxTextureWidth = MaxWidth + TexturePadding;
+		int MaxTextureHeight = MaxHeight + TexturePadding;
+		Vector2Int RenderTextureSizes = new Vector2Int(MaxTextureWidth, MaxTextureHeight);
+
+		int TargetNumberOfCells = 10;
 		int NumPoissonSamples = 30;
 		string RandomSeedString = "Blayne";
 		ESiteDistribution SiteDistributionMode = ESiteDistribution.RANDOM_MIRRORED;
 		List<Vector3> ListOfInitialSites = new List<Vector3>();
-		ListOfInitialSites.Add(new Vector3(0, 0, 0));
-		ListOfInitialSites.Add(new Vector3(MaxWidth, MaxHeight, 0));
-		ListOfInitialSites.Add(new Vector3(0, MaxHeight, 0));
-		ListOfInitialSites.Add(new Vector3(MaxWidth, 0, 0));
+		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, TextureHalfPadding, 0)); // Bottom Left in Image Programs / Texture Space
+		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding, MaxHeight + TextureHalfPadding, 0)); // Top right in Image Programs / Texture Space
+		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, MaxHeight + TextureHalfPadding, 0)); // Top Left
+		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding, TextureHalfPadding, 0)); // Bottom Right
 
 		PolygonalNodeGraphGenerator PolygonalGraphGenerator = new PolygonalNodeGraphGenerator();
 		PolygonalNodeGraphGeneratorSettings PolygonalGraphSettings = new PolygonalNodeGraphGeneratorSettings();
@@ -178,7 +186,7 @@ public class WorldGenerator : MonoBehaviour
 		TriangulationConfig triangulationConfig = new TriangulationConfig();
 		triangulationConfig.IsConforming = IsConformingDelaunay;
 		triangulationConfig.NumSmoothingIterations = NumOfSmoothingIterations;
-		triangulationConfig.MapDimensions = MapDimensions;
+		triangulationConfig.MapDimensions = RenderTextureSizes;
 
 		SiteGeneratorConfig siteGeneratorConfig = new SiteGeneratorConfig();
 
@@ -202,15 +210,15 @@ public class WorldGenerator : MonoBehaviour
 		Mesh VorGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI);
 		Mesh TriGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.DELAUNAY);
 
-		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, VorGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(RenderTextureSizes, VorGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
 		SaveMapAsPNG("TestVoronoiNodeGraph_RTex", VoronoiGraphRTex);
 
-		RenderTexture TriangleGraphRTex = MapUtils.RenderPolygonalWireframeMap(MapDimensions, TriGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
+		RenderTexture TriangleGraphRTex = MapUtils.RenderPolygonalWireframeMap(RenderTextureSizes, TriGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white);
 		SaveMapAsPNG("TestTriangleNodeGraph_RTex", TriangleGraphRTex);
 
 		PolyMapRT = VoronoiGraphRTex;
 
-		UpdateMapDisplay(PolyMapRT, MapDimensions);
+		UpdateMapDisplay(PolyMapRT, RenderTextureSizes);
 	}
 
 	public void GenerateWorld()

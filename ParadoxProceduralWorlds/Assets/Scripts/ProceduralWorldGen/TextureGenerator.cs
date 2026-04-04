@@ -1043,17 +1043,17 @@ public static class TextureGenerator
         OutTex.filterMode = FilterMode.Point;
         OutTex.wrapMode = TextureWrapMode.Clamp;
 
-        List<Color> CellColours = new List<Color>();
+		Color[] CellColours = new Color[InNuMCells];
 
         for (int i = 0; i < InNuMCells; i++)
         {
-            CellColours.Add(InColours[InCellByID[i]]);
+            CellColours[i] = InColours[InCellByID[i]];
         }
 
-        OutTex.SetPixels(CellColours.ToArray());
+        OutTex.SetPixels(CellColours);
         OutTex.Apply(false);
 
-        SaveMapAsPNG("TectonicPlateTextureMap", OutTex);
+        SaveMapAsPNG("TectonicPlateTextureMapV2", OutTex);
 
         return OutTex;
     }

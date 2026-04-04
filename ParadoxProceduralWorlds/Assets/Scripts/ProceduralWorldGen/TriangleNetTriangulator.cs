@@ -174,6 +174,7 @@ public class TriangleNetTriangulator : ITriangulator
 		for (int i = 0; i < verts.Length; i++)
 		{
 			verts[i] = new Vector3((float)triangleNetVerts[i].x, (float)triangleNetVerts[i].y, 0);
+			Debug.Log("Coord: x: " + triangleNetVerts[i].x + ", y: " + triangleNetVerts[i].y);
 		}
 
 		int k = 0;

@@ -101,7 +101,19 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 			PlateSizes.Add(NodeGraph.GetNumFaces());
 		}
 
-		int[] CellsToFill = CellGroupFloodFill(InitialPlatePoints.ToList(), PlateSizes);
+		// get our array of tectonic plate group ids assigned to our cells
+		int[] AssignedTectonicPlateCells = CellGroupFloodFill(InitialPlatePoints.ToList(), PlateSizes);
+
+		// visualize
+		Vector2Int Hues = new Vector2Int(30, 330);
+		Vector2Int Saturation = new Vector2Int(99, 100);
+		Vector2Int Brightness = new Vector2Int(99, 100);
+		List<Color> PlateColours = TextureGenerator.GenerateHSVColours(MapSettings.NumberOfTectonicPlates + 1, Hues, Saturation, Brightness);
+		PlateColours.Shuffle();
+
+		Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumFaces(), AssignedTectonicPlateCells, PlateColours);
+
+		//RenderTexture PlateMapRT = MapUtils.RenderPolygonalMap(WorldMapMesh, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());
 	}
 
 	/*
@@ -142,7 +154,7 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 	/// </summary>
 	/// <param name="InInitialCells">The initial selection of cells to flood fill from</param>
 	/// <param name="InTargetSizes">Target size of the passed in groups</param>
-	/// <returns></returns>
+	/// <returns>List of Tectonic Plate IDs (starting from 1, 0 is reserved) for each Cell ID</returns>
 	public int[] CellGroupFloodFill(List<int> InInitialCells, List<int> InTargetSizes)
 	{
 		/*
