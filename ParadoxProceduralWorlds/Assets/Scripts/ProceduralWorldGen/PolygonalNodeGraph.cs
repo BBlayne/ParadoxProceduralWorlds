@@ -10,7 +10,8 @@ using VQuery = DataStructures.ViliWonka.KDTree.KDQuery;
 public enum ENodeType
 {
 	None,
-	BOUNDARY
+	BOUNDARY,
+	INTERIOR
 }
 
 public enum EUnityMeshMode
@@ -101,6 +102,8 @@ public class VVertex : VertexBase, INode
 	public DFace Triangle { get; set; }
 
 	public VHalfEdge Leaving {  get; set; }
+
+	public ENodeType NodeType { get; set; } = ENodeType.None;
 
 	public List<INode> Neighbours { get; set; }
 

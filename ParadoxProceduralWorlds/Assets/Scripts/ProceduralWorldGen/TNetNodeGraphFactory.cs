@@ -40,7 +40,7 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 		Triangulator.Configuration = Configuration;
 	}
 
-	public INodeGraph GenerateNodeGraph()
+	public INodeGraph GenerateNodeGraph(bool InRelax = false, int InRelaxationIterations = 5)
 	{
 		if (Triangulator == null)
 			return null;
@@ -279,6 +279,12 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 			{
 				nodeGraph.HalfEdges[i].Twin = nodeGraph.HalfEdges[TempHalfEdge.Twin.ID];
 			}
+
+			if (TempHalfEdge.Twin == null && nodeGraph.HalfEdges[i].Start != null && nodeGraph.HalfEdges[i].End != null)
+			{
+				nodeGraph.HalfEdges[i].Start.NodeType = ENodeType.BOUNDARY;
+				nodeGraph.HalfEdges[i].End.NodeType = ENodeType.BOUNDARY;
+			}
 			
 			if (TempHalfEdge.Next != null && TempHalfEdge.Next.ID >= 0)
 			{
@@ -364,6 +370,25 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 			foreach (var elem in LeavingEdges)
 			{
 				nodeGraph.VVertices[i].Neighbours.Add(nodeGraph.HalfEdges[elem.ID]);
+			}
+		}
+
+		if (InRelax)
+		{
+			VVertex[] VerticesToSmooth = nodeGraph.VVertices;
+			for (int i = 0; i < InRelaxationIterations; i++)
+			{
+				foreach (var vert in VerticesToSmooth)
+				{
+					if (vert.NodeType == ENodeType.BOUNDARY)
+						continue;
+
+					Vector3 TriangleCentroid = new Vector3();
+					foreach (VHalfEdge vhalfedge in vert.Neighbours)
+					{
+						TriangleCentroid += vhalfedge.Cell.Centroid.Coords;
+					}
+				}
 			}
 		}
 
