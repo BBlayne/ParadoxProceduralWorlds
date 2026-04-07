@@ -32,11 +32,17 @@ public struct TriangulationConfig : ITriangulationConfig
 	public Vector2Int MapDimensions { get; set; }
 	public Vector2Int TextureDimensions { get; set; }
 
+	public bool VoronoiRelaxationEnabled { get; set; }
+
+	public int NumRelaxationIterations { get; set; }
+
 	public TriangulationConfig(bool InIsConformingDelaunay, int InSmoothingIterations)
 	{
 		IsConforming = InIsConformingDelaunay;
 		NumSmoothingIterations = InSmoothingIterations;
 		MapDimensions = new Vector2Int(512, 512);
 		TextureDimensions = new Vector2Int(512, 512);
+		VoronoiRelaxationEnabled = true;
+		NumRelaxationIterations = 5;
 	}
 }

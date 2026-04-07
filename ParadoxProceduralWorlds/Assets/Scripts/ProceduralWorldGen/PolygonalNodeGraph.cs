@@ -64,7 +64,11 @@ public class DFace : NodeBase, INode
 {
 	public INodeData Data { get; set; }
 
+	// The voronoi vertex associated with this triangle, at most 1
 	public VVertex Centroid {  get; set; }
+
+	// the actual midpoint of this triangle as the centroid might get adjusts for aesthetics
+	public Vector3 Origin { get; set; }
 
 	public DVertex[] Vertices { get; set; }
 	public DEdge[] Edges { get; set; }
@@ -74,6 +78,7 @@ public class DFace : NodeBase, INode
 		Vertices = new DVertex[3];
 		Neighbours = new List<INode>();
 		Edges = new DEdge[3];
+		Origin = new Vector3();
 	}
 
 	public List<INode> Neighbours { get; set; }

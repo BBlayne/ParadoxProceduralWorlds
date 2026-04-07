@@ -40,7 +40,7 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 		Triangulator.Configuration = Configuration;
 	}
 
-	public INodeGraph GenerateNodeGraph(bool InRelax = false, int InRelaxationIterations = 5)
+	public INodeGraph GenerateNodeGraph()
 	{
 		if (Triangulator == null)
 			return null;
@@ -130,6 +130,7 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 								nodeGraph.Faces[i].Vertices[2].Coords;
 			MidPoint /= 3;
 			TriangleCenters.Add(i, MidPoint);
+			nodeGraph.Faces[i].Origin = MidPoint;
 		}
 
 		TriangleKDTree = new KDTree(TriangleCenters.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToArray(), 32);
@@ -168,17 +169,6 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 			nodeGraph.VVertices[i] = new VVertex();
 			nodeGraph.VVertices[i].ID = VorVert.ID;
 			nodeGraph.VVertices[i].Coords = new Vector3((float)VorVert.X, (float)VorVert.Y, 0.0f);
-
-			List<int> Results = new List<int>();
-			if (MapUtils.GetNodeIDFromCoordinate(nodeGraph.VVertices[i].Coords, TriangleKDTree, SiteQuery, ref Results))
-			{
-				nodeGraph.Faces[Results[0]].Centroid = nodeGraph.VVertices[i];
-				nodeGraph.VVertices[i].Triangle = nodeGraph.Faces[Results[0]];
-			}
-			else
-			{
-				Debug.LogWarning("Node ID (Triangle Centroid Voronoi Vertex) not found...");
-			}
 		}
 
 		/*
@@ -280,7 +270,7 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 				nodeGraph.HalfEdges[i].Twin = nodeGraph.HalfEdges[TempHalfEdge.Twin.ID];
 			}
 
-			if (TempHalfEdge.Twin == null && nodeGraph.HalfEdges[i].Start != null && nodeGraph.HalfEdges[i].End != null)
+			if (TempHalfEdge.Twin == null || (TempHalfEdge.Twin != null && (TempHalfEdge.Twin.face.ID == -1 || TempHalfEdge.face.ID == -1)))
 			{
 				nodeGraph.HalfEdges[i].Start.NodeType = ENodeType.BOUNDARY;
 				nodeGraph.HalfEdges[i].End.NodeType = ENodeType.BOUNDARY;
@@ -373,23 +363,51 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 			}
 		}
 
-		if (InRelax)
+		// properly initializing the centroids of all triangles and which triangle corresponds
+		// to which voronoi vertex, as ideally every voronoi vertex should be in the middle of 
+		// its corresponding delaunay triangle
+		VVertex[] VerticesToSmooth = nodeGraph.VVertices;
+		foreach (var vert in VerticesToSmooth)
 		{
-			VVertex[] VerticesToSmooth = nodeGraph.VVertices;
-			for (int i = 0; i < InRelaxationIterations; i++)
+			if (vert.NodeType == ENodeType.BOUNDARY)
 			{
-				foreach (var vert in VerticesToSmooth)
-				{
-					if (vert.NodeType == ENodeType.BOUNDARY)
-						continue;
+				Debug.Log("vertex id: " + vert.ID + " is a boundary vertex skipping...");
+				continue;
+			}				
 
-					Vector3 TriangleCentroid = new Vector3();
-					foreach (VHalfEdge vhalfedge in vert.Neighbours)
+			Vector3 TriangleCentroid = new Vector3();		
+			Debug.Log("vertex id: " + vert.ID + " number of neighbours: " + vert.Neighbours.Count);
+			foreach (VHalfEdge vhalfedge in vert.Neighbours)
+			{
+				if (vhalfedge.Twin != null && vhalfedge.Cell != null && vhalfedge.Cell.Centroid != null)
+				{
+					TriangleCentroid += vhalfedge.Cell.Centroid.Coords;
+
+					if (vhalfedge.Twin.Cell != null && vhalfedge.Cell.Centroid != null)
 					{
-						TriangleCentroid += vhalfedge.Cell.Centroid.Coords;
-					}
+						//TriangleCentroid += vhalfedge.Twin.Cell.Centroid.Coords;
+					}	
 				}
 			}
+			TriangleCentroid /= vert.Neighbours.Count;
+
+			List<int> Results = new List<int>();
+			if (MapUtils.GetNodeIDFromCoordinate(TriangleCentroid, TriangleKDTree, SiteQuery, ref Results))
+			{
+				Debug.Log("Assigning voronoi cell vertex id: " + vert.ID + " to delaunay centroid: " + Results[0]);
+				nodeGraph.Faces[Results[0]].Centroid = vert;
+				vert.Triangle = nodeGraph.Faces[Results[0]];
+				if (Configuration.VoronoiRelaxationEnabled)
+				{
+					// if relaxation is enabled, update the position of this vertex to match
+					// it's triangles centroid
+					vert.Coords = TriangleCentroid;
+				}
+			}
+			else
+			{
+				Debug.LogWarning("Node ID (Triangle Centroid Voronoi Vertex) not found...");
+			}					
 		}
 
 		return nodeGraph;

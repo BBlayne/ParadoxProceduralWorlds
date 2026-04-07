@@ -45,9 +45,15 @@ public class PolygonalNodeGraphGenerator : IGenerator<TNetNodeGraphFactory, Tria
 		NodeGraphFactory.Init();
 	}
 
-	public INodeGraph Generate(bool InRelax = false, int NumRelaxationIterations = 5)
+	public INodeGraph Generate()
 	{
-		return NodeGraphFactory.GenerateNodeGraph(InRelax, NumRelaxationIterations);
+		if (MapSettings == null)
+		{
+			Debug.LogWarning("MapSettings is not valid.");
+			return null;
+		}			
+
+		return NodeGraphFactory.GenerateNodeGraph();
 	}
 
 	public INodeGraph Generate(INodeGraph InGraphMap)

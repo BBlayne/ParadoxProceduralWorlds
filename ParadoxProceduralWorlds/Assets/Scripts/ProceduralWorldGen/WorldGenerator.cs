@@ -175,10 +175,11 @@ public class WorldGenerator : MonoBehaviour
 		string RandomSeedString = "Blayne";
 		ESiteDistribution SiteDistributionMode = ESiteDistribution.RANDOM_MIRRORED;
 		List<Vector3> ListOfInitialSites = new List<Vector3>();
-		ListOfInitialSites.Add(new Vector3(TextureHalfPadding - 1, TextureHalfPadding - 1, 0)); // Bottom Left in Image Programs / Texture Space
-		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - 1, MaxHeight + TextureHalfPadding - 1, 0)); // Top right in Image Programs / Texture Space
-		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, MaxHeight + TextureHalfPadding - 1, 0)); // Top Left
-		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - 1, TextureHalfPadding, 0)); // Bottom Right
+		int Nudge = 0;
+		ListOfInitialSites.Add(new Vector3(TextureHalfPadding - Nudge, TextureHalfPadding - Nudge, 0)); // Bottom Left in Image Programs / Texture Space
+		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - Nudge, MaxHeight + TextureHalfPadding - Nudge, 0)); // Top right in Image Programs / Texture Space
+		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, MaxHeight + TextureHalfPadding - Nudge, 0)); // Top Left
+		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - Nudge, TextureHalfPadding, 0)); // Bottom Right
 
 		PolygonalNodeGraphGenerator PolygonalGraphGenerator = new PolygonalNodeGraphGenerator();
 		PolygonalNodeGraphGeneratorSettings PolygonalGraphSettings = new PolygonalNodeGraphGeneratorSettings();
@@ -188,6 +189,8 @@ public class WorldGenerator : MonoBehaviour
 		triangulationConfig.NumSmoothingIterations = NumOfSmoothingIterations;
 		triangulationConfig.MapDimensions = MapDimensions;
 		triangulationConfig.TextureDimensions = RenderTextureSizes;
+		triangulationConfig.NumRelaxationIterations = 5;
+		triangulationConfig.VoronoiRelaxationEnabled = true;
 
 		SiteGeneratorConfig siteGeneratorConfig = new SiteGeneratorConfig();
 
