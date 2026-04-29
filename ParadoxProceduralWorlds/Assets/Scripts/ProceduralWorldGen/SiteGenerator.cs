@@ -28,6 +28,8 @@ public struct SiteGeneratorConfig
 	public int NumPoissonSamples { get; set; }
 
 	public bool UseRandomSeed { get; set; }
+
+	public float Bias { get; set; } 
 }
 
 public struct SiteData

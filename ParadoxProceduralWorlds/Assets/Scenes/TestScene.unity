@@ -525,7 +525,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cee858bdb4b71994bbd3595dace84b8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  OrthographicSizeModifier: 10
+  OrthographicSizeModifier: 100
 --- !u!4 &825779248
 Transform:
   m_ObjectHideFlags: 0
@@ -574,9 +574,13 @@ MonoBehaviour:
   UnlitTextureMaterial: {fileID: 2100000, guid: 17f685d74597c024f8e248ddacc88df5, type: 2}
   VoronoiTexture: {fileID: 2800000, guid: 1ec5955721cab59459700958a9ee7c2d, type: 3}
   TargetNumberOfCells: 5000
-  MapPadding: 25
+  MapPadding: {x: 25, y: 25}
   NumberOfTectonicPlates: 30
   NumberOfContinents: 5
+  NudgeFactorSW: 0
+  NudgeFactorNW: 0
+  NudgeFactorNE: 0
+  NudgeFactorSE: 0
   WorldLandmassPercentage: 0.35
   bIsRandomFloodFill: 1
   bOutputDebugMaps: 1
@@ -645,7 +649,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
-  m_ScaleFactor: 1
+  m_ScaleFactor: 2.5
   m_ReferenceResolution: {x: 800, y: 600}
   m_ScreenMatchMode: 0
   m_MatchWidthOrHeight: 0

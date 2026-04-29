@@ -70,4 +70,9 @@ public class CameraController : MonoBehaviour
         }
         Camera.main.orthographicSize = Camera.main.orthographicSize * OrthographicSizeModifier;
     }
+
+	private void Update()
+	{
+		//UpdateCamera();
+	}
 }

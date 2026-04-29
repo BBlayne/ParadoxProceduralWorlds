@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TriangleNet.Voronoi;
 using UnityEngine;
+using static UnityEditor.PlayerSettings;
 using TFace = TriangleNet.Topology.DCEL.Face;
 using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
 using TMesh = TriangleNet.Mesh;
@@ -423,6 +424,9 @@ public static class MapUtils
                 UnityEngine.Random.Range(MarginY + InPadding.y, InTextureSize.y - MarginY - InPadding.y - EdgeWidthY),
                 0);
 
+			//Pos.x += 0.5f;
+			//Pos.y += 0.5f;
+
             LeftSites.Add(Pos);
             Points.Add(Pos);
 			EdgeMap.Add(i, i);
@@ -430,14 +434,17 @@ public static class MapUtils
 
         for (int i = 0; i < MiddlePointsNum; i++)
         {
+			Vector3 MiddlePos = new Vector3(
+                UnityEngine.Random.Range(MarginX + InPadding.x + EdgeWidthX, InTextureSize.x - MarginX - InPadding.x - EdgeWidthX),
+                UnityEngine.Random.Range(MarginY + InPadding.y + EdgeWidthY, InTextureSize.y - MarginY - InPadding.y - EdgeWidthY),
+                0
+            );
+
+			//MiddlePos.x += 0.5f;
+			//MiddlePos.y += 0.5f;
             Points.Add
             (
-                new Vector3
-                (
-                    UnityEngine.Random.Range(MarginX + InPadding.x + EdgeWidthX, InTextureSize.x - MarginX - InPadding.x - EdgeWidthX),
-                    UnityEngine.Random.Range(MarginY + InPadding.y + EdgeWidthY, InTextureSize.y - MarginY - InPadding.y - EdgeWidthY),
-                    0
-                )
+				MiddlePos
             );
         }
 
@@ -561,6 +568,24 @@ public static class MapUtils
 			InMeshMaterial.SetColor("_Color", InColour);
 			PolyMapRT = new RenderTexture(InMapSizes.x, InMapSizes.y, 0);
 			PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, InMapSizes, InMeshMaterial, true, isBGTransparent);
+		}
+
+		return PolyMapRT;
+	}
+
+	public static RenderTexture RenderPolygonalMap(Mesh InMapMesh, Vector2Int MapSizes, Texture2D InTexture, Material InMeshMaterial, bool InIsDebug = false)
+	{
+		RenderTexture PolyMapRT = null;
+		if (InTexture != null && InMeshMaterial != null)
+		{
+			PolyMapRT = new RenderTexture(MapSizes.x, MapSizes.y, 0);
+			InMeshMaterial.mainTexture = InTexture;
+
+			PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapSizes, InMeshMaterial, false, true);
+			if (InIsDebug)
+			{
+				TextureGenerator.SaveMapAsPNG("RenderPolygonalMapDebug", PolyMapRT);
+			}
 		}
 
 		return PolyMapRT;

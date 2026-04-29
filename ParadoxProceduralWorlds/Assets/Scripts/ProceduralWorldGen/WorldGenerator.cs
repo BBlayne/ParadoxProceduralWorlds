@@ -88,6 +88,18 @@ public class WorldGenerator : MonoBehaviour
 	[Range(1, 10)]
 	public int NumberOfContinents = 3;
 
+	[Range(-100, 100)]
+	public int NudgeFactorSW = 1;
+
+	[Range(-100, 100)]
+	public int NudgeFactorNW = 1;
+
+	[Range(-100, 100)]
+	public int NudgeFactorNE = 1;
+
+	[Range(-100, 100)]
+	public int NudgeFactorSE = 1;
+
 	[Range(0.1f, 1.0f)]
 	public float WorldLandmassPercentage = 0.25f;
 	public bool bIsRandomFloodFill = false;
@@ -156,30 +168,36 @@ public class WorldGenerator : MonoBehaviour
 		ResetRtx(PolyMapRT);
 
 		// Initial parameters for testing
-		int MaxWidth = 512;
-		int MaxHeight = 512;
+		int MaxWidth = 500;
+		int MaxHeight = 500;
 
 		Vector2Int MapDimensions = new Vector2Int(MaxWidth, MaxHeight);
 		int NumOfSmoothingIterations = 10;
 		bool IsConformingDelaunay = true;
 		Vector2Int MapPadding = new Vector2Int(25, 25);
 
-		int TexturePadding = 50;
+		int TexturePadding = 100;
 		int TextureHalfPadding = TexturePadding / 2;
 		int MaxTextureWidth = MaxWidth + TexturePadding;
 		int MaxTextureHeight = MaxHeight + TexturePadding;
 		Vector2Int RenderTextureSizes = new Vector2Int(MaxTextureWidth, MaxTextureHeight);
 
-		int TargetNumberOfCells = 10;
+		int TargetNumberOfCells = 100;
 		int NumPoissonSamples = 30;
 		string RandomSeedString = "Blayne";
 		ESiteDistribution SiteDistributionMode = ESiteDistribution.RANDOM_MIRRORED;
 		List<Vector3> ListOfInitialSites = new List<Vector3>();
-		int Nudge = 0;
-		ListOfInitialSites.Add(new Vector3(TextureHalfPadding - Nudge, TextureHalfPadding - Nudge, 0)); // Bottom Left in Image Programs / Texture Space
-		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - Nudge, MaxHeight + TextureHalfPadding - Nudge, 0)); // Top right in Image Programs / Texture Space
-		ListOfInitialSites.Add(new Vector3(TextureHalfPadding, MaxHeight + TextureHalfPadding - Nudge, 0)); // Top Left
-		ListOfInitialSites.Add(new Vector3(MaxWidth + TextureHalfPadding - Nudge, TextureHalfPadding, 0)); // Bottom Right
+
+		// four initial corners
+		Vector3 BottemLeft = new Vector3(TextureHalfPadding, TextureHalfPadding, 0.0f);
+		Vector3 BottemRight = new Vector3(TextureHalfPadding + MaxWidth - 1.0f, TextureHalfPadding, 0.0f);
+		Vector3 TopLeft = new Vector3(TextureHalfPadding, TextureHalfPadding + MaxHeight - 1.0f, 0.0f);
+		Vector3 TopRight = new Vector3(TextureHalfPadding + MaxWidth - 1.0f, TextureHalfPadding + MaxHeight - 1.0f, 0.0f);
+
+		ListOfInitialSites.Add(BottemLeft); // Bottom Left in Image Programs / Texture Space
+		ListOfInitialSites.Add(TopRight); // Top right in Image Programs / Texture Space
+		ListOfInitialSites.Add(TopLeft); // Top Left
+		ListOfInitialSites.Add(BottemRight); // Bottom Right
 
 		PolygonalNodeGraphGenerator PolygonalGraphGenerator = new PolygonalNodeGraphGenerator();
 		PolygonalNodeGraphGeneratorSettings PolygonalGraphSettings = new PolygonalNodeGraphGeneratorSettings();
@@ -218,7 +236,7 @@ public class WorldGenerator : MonoBehaviour
 		Material PointDebugMaterial = new Material(TextureGenerator.GetUnlitMaterial());
 		PointDebugMaterial.SetColor(0, Color.red);
 
-		RenderTexture PointsRenderTexture = MapUtils.DrawPointsToRenderTexture(RenderTextureSizes, nodeGraph.CellCoordinates, PointDebugMaterial, Color.red, false);
+		RenderTexture PointsRenderTexture = MapUtils.DrawPointsToRenderTexture(RenderTextureSizes, nodeGraph.CellCoordinates, PointDebugMaterial, Color.red, true);
 		SaveMapAsPNG("TestDelaunaySites_RTex", PointsRenderTexture);
 
 		RenderTexture VoronoiGraphRTex = MapUtils.RenderPolygonalWireframeMap(RenderTextureSizes, VorGraphMesh, TextureGenerator.GetUnlitMaterial(), Color.white, false);
@@ -229,7 +247,19 @@ public class WorldGenerator : MonoBehaviour
 
 		PolyMapRT = VoronoiGraphRTex;
 
-		UpdateMapDisplay(PolyMapRT, RenderTextureSizes);
+		LandmassGenerator landmassGenerator = new LandmassGenerator();
+		landmassGenerator.Generate(nodeGraph);
+
+		if (landmassGenerator.TectonicPlatesRTex != null)
+		{
+			UpdateMapDisplay(landmassGenerator.TectonicPlatesRTex, RenderTextureSizes);
+			SaveMapAsPNG("TestTectonicPlatesMap_RTex", landmassGenerator.TectonicPlatesRTex);
+			SaveMapAsPNG("TestContinentPlatesMap_RTex", landmassGenerator.ContinentRTex);
+		}
+		else
+		{
+			UpdateMapDisplay(PolyMapRT, RenderTextureSizes);
+		}		
 	}
 
 	public void GenerateWorld()

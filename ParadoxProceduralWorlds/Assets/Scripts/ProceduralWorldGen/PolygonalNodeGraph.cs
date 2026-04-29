@@ -2,10 +2,14 @@
 
 using DataStructures.ViliWonka.KDTree;
 using System.Collections.Generic;
+using System.Linq;
+using TriangleNet.Geometry;
 using UnityEditor.Timeline.Actions;
 using UnityEngine;
-
+using TMesh = TriangleNet.Mesh;
+using TVertex = TriangleNet.Geometry.Vertex;
 using VQuery = DataStructures.ViliWonka.KDTree.KDQuery;
+using TQualityOptions = TriangleNet.Meshing.QualityOptions;
 
 public enum ENodeType
 {
@@ -332,7 +336,7 @@ public class PolygonalNodeGraph : INodeGraph
 		switch (InMeshMode) 
 		{
 			case EUnityMeshMode.VORONOI:
-				return GenerateUnityMeshFromVoronoi();
+				return GenerateSimpleUnityMeshFromVoronoi();
 			case EUnityMeshMode.DELAUNAY:
 				return GenerateUnityMeshFromDelaunay();
 			default:
@@ -340,7 +344,7 @@ public class PolygonalNodeGraph : INodeGraph
 		}
 	}
 
-	private Mesh GenerateUnityMeshFromVoronoi()
+	private Mesh GenerateSimpleUnityMeshFromVoronoi()
 	{
 		Mesh OutMesh = new Mesh();
 
@@ -359,6 +363,100 @@ public class PolygonalNodeGraph : INodeGraph
 		OutMesh.SetIndices(MeshIndices, MeshTopology.Lines, 0);
 
 		return OutMesh;
+	}
+
+	private Mesh GenerateUnityCellMeshFromVoronoi()
+	{
+		Mesh OutMesh = new Mesh();
+
+		TriangleNet.Meshing.ConstraintOptions options = new TriangleNet.Meshing.ConstraintOptions()
+		{
+			ConformingDelaunay = true
+		};
+
+		Vector2 TextureSizes = new Vector2Int(600, 600);
+
+		List<VCell> cells = new List<VCell>(Cells);
+		int numCells = cells.Count;
+		float Offset = 0.0625f / cells.Count;
+
+		List<VHalfEdge> Edges = new List<VHalfEdge>(HalfEdges);
+		List<Vector3> MeshVertices = new List<Vector3>();
+		List<int> MeshIndices = new List<int>();
+		List<Vector2> UVs = new List<Vector2>();
+		int IndexCounter = 0;
+		for (int i = 0; i < cells.Count; i++)
+		{
+			VCell cell = cells[i];
+			Polygon DelaneyShape = new Polygon();
+			for (int j = 0; j < cell.Vertices.Length; j++)
+			{
+				VVertex vVertex = cell.Vertices[j];
+				//MeshVertices.Add(Edges[i].Start.Coords);
+				//MeshVertices.Add(Edges[i].End.Coords);
+				//MeshIndices.Add(IndexCounter++);
+				//MeshIndices.Add(IndexCounter++);
+				
+				UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
+
+				TVertex VertexToAdd = new TVertex(vVertex.Coords.x, vVertex.Coords.y);
+				DelaneyShape.Add(VertexToAdd);
+			}
+			DelaneyShape.Bounds();
+
+			Mesh cellMesh = GenerateUnityMeshFromTriangleNetMesh((TMesh)DelaneyShape.Triangulate(options));
+			// add to our mesh
+		}
+
+		OutMesh.vertices = MeshVertices.ToArray();
+		OutMesh.SetIndices(MeshIndices, MeshTopology.Triangles, 0);
+		OutMesh.SetUVs(0, UVs.ToArray());
+
+		return OutMesh;
+	}
+
+	public Mesh GenerateUnityMeshFromTriangleNetMesh(TMesh InMesh)
+	{
+		return GenerateUnityMeshFromTriangulation(InMesh);
+	}
+
+	public Mesh GenerateUnityMeshFromTriangulation(TMesh triangleNetMesh, TQualityOptions options = null)
+	{
+		if (options != null)
+		{
+			triangleNetMesh.Refine(options);
+		}
+
+		Mesh mesh = new Mesh();
+		var triangleNetVerts = triangleNetMesh.Vertices.ToList();
+
+		var triangles = triangleNetMesh.Triangles;
+
+		Vector3[] verts = new Vector3[triangleNetVerts.Count];
+		int[] trisIndex = new int[triangles.Count * 3];
+
+		for (int i = 0; i < verts.Length; i++)
+		{
+			verts[i] = new Vector3((float)triangleNetVerts[i].x, (float)triangleNetVerts[i].y, 0);
+		}
+
+		int k = 0;
+
+		foreach (var triangle in triangles)
+		{
+			for (int i = 2; i >= 0; i--)
+			{
+				trisIndex[k] = triangleNetVerts.IndexOf(triangle.GetVertex(i));
+				k++;
+			}
+		}
+
+		mesh.vertices = verts;
+		mesh.triangles = trisIndex;
+
+		mesh.RecalculateBounds();
+		mesh.RecalculateNormals();
+		return mesh;
 	}
 
 	private Mesh GenerateUnityMeshFromDelaunay()

@@ -27,9 +27,19 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 
 	public KDTree VSiteKDTree = null;
 
+	public RenderTexture ContinentRTex;
+	public RenderTexture TectonicPlatesRTex;
+
 	public LandmassGenerator()
 	{
+		MapSetting DefaultMapSettings = new MapSetting();
+		DefaultMapSettings.MapName = "TestTectMap";
+		DefaultMapSettings.NumberOfTectonicPlates = 5;
+		DefaultMapSettings.NumberOfContinents = 3;
+		DefaultMapSettings.MapSize = new Vector2Int(600, 600);
+		DefaultMapSettings.LandToWaterRatio = 0.5f;
 
+		MapSettings = DefaultMapSettings;
 	}
 
 	public INodeGraph Generate(INodeGraph InGraph)
@@ -44,14 +54,41 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 
 		Dictionary<int, Vector3> NodeCoords = new Dictionary<int, Vector3>();
 
+		// todo
+		GenerateTectonicPlates();
+		GenerateContinents();
 
+		// todo - actually assign values to the graph
 
 		return InGraph;
 	}
 
-	void GenerateContinents(int InNumContinents, int InPadding, float LandWaterRatio)
+	void GenerateContinents()
 	{
+		int[] InitialContinentPoints = DetermineInitialContinentCells(
+			MapSettings.NumberOfContinents, 
+			25
+		);		
 
+		List<int> ContinentSizes = new List<int>();
+		for (int i = 0; i < InitialContinentPoints.Length; i++)
+		{
+			ContinentSizes.Add(NodeGraph.GetNumFaces());
+		}
+
+		// get our array of tectonic plate group ids assigned to our cells
+		int[] AssignedContinentCells = CellGroupFloodFill(InitialContinentPoints.ToList(), ContinentSizes);
+
+		// visualize
+		Vector2Int Hues = new Vector2Int(30, 330);
+		Vector2Int Saturation = new Vector2Int(99, 100);
+		Vector2Int Brightness = new Vector2Int(99, 100);
+		List<Color> ContinentColours = TextureGenerator.GenerateHSVColours(MapSettings.NumberOfContinents + 1, Hues, Saturation, Brightness);
+		ContinentColours.Shuffle();
+
+		Mesh ContinentMesh = NodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI);
+		Texture2D ContinentTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumCells(), AssignedContinentCells, ContinentColours);
+		ContinentRTex = MapUtils.RenderPolygonalMap(ContinentMesh, MapSettings.MapSize,ContinentTexMap, TextureGenerator.GetUnlitTextureMaterial());
 	}
 
 	/*
@@ -111,10 +148,10 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 		List<Color> PlateColours = TextureGenerator.GenerateHSVColours(MapSettings.NumberOfTectonicPlates + 1, Hues, Saturation, Brightness);
 		PlateColours.Shuffle();
 
-		Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumFaces(), AssignedTectonicPlateCells, PlateColours);
+		Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumCells(), AssignedTectonicPlateCells, PlateColours);
 
-		//RenderTexture PlateMapRT = MapUtils.RenderPolygonalMap(WorldMapMesh, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());
-	}
+		Mesh TectPlateMesh = NodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI);
+		TectonicPlatesRTex = MapUtils.RenderPolygonalMap(TectPlateMesh, MapSettings.MapSize, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());	}
 
 	/*
 	 * Functions for Continents and Plates are similar atm, but might change later,
