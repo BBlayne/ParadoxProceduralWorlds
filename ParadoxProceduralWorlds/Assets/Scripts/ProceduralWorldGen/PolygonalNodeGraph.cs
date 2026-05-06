@@ -10,6 +10,7 @@ using TMesh = TriangleNet.Mesh;
 using TVertex = TriangleNet.Geometry.Vertex;
 using VQuery = DataStructures.ViliWonka.KDTree.KDQuery;
 using TQualityOptions = TriangleNet.Meshing.QualityOptions;
+using UnityEngine.Assertions;
 
 public enum ENodeType
 {
@@ -20,7 +21,8 @@ public enum ENodeType
 
 public enum EUnityMeshMode
 {
-	VORONOI,
+	VORONOI_WIRE,
+	VORONOI_FILLED,
 	DELAUNAY
 }
 
@@ -335,7 +337,9 @@ public class PolygonalNodeGraph : INodeGraph
 	{
 		switch (InMeshMode) 
 		{
-			case EUnityMeshMode.VORONOI:
+			case EUnityMeshMode.VORONOI_FILLED:
+				return GenerateUnityCellMeshFromVoronoi();
+			case EUnityMeshMode.VORONOI_WIRE:
 				return GenerateSimpleUnityMeshFromVoronoi();
 			case EUnityMeshMode.DELAUNAY:
 				return GenerateUnityMeshFromDelaunay();
@@ -384,27 +388,53 @@ public class PolygonalNodeGraph : INodeGraph
 		List<Vector3> MeshVertices = new List<Vector3>();
 		List<int> MeshIndices = new List<int>();
 		List<Vector2> UVs = new List<Vector2>();
-		int IndexCounter = 0;
+		int IndexCounter = 3;
 		for (int i = 0; i < cells.Count; i++)
 		{
 			VCell cell = cells[i];
-			Polygon DelaneyShape = new Polygon();
-			for (int j = 0; j < cell.Vertices.Length; j++)
+			List<int> cellIndices = new List<int>();
+			VHalfEdge current = cell.HalfEdge;
+			// todo figure out why vertices is null
+			//Assert.IsTrue(cell.Vertices.Length >= 3);
+			if (cell.Vertices.Length < 3)
 			{
-				VVertex vVertex = cell.Vertices[j];
-				//MeshVertices.Add(Edges[i].Start.Coords);
-				//MeshVertices.Add(Edges[i].End.Coords);
-				//MeshIndices.Add(IndexCounter++);
-				//MeshIndices.Add(IndexCounter++);
-				
+				Debug.Log("Error: Invalid sized voronoi cell...");
+				continue;
+			}	
+
+			Vector2 v_0 = cell.Vertices[0].Coords;
+			MeshVertices.Add(v_0);
+			UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
+			Vector2 v_c = new Vector2();
+			Vector2 v_n = new Vector2();			
+			for (int j = 1; j < cell.Vertices.Length - 1; j++)
+			{
+
+				MeshVertices.Add(cell.Vertices[j].Coords);
+				v_c = cell.Vertices[j].Coords;
+				v_n = cell.Vertices[j + 1].Coords;
+
+				MeshIndices.Add(0);
+				MeshIndices.Add(IndexCounter - 2);
+				MeshIndices.Add(IndexCounter - 1);
+
 				UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
-
-				TVertex VertexToAdd = new TVertex(vVertex.Coords.x, vVertex.Coords.y);
-				DelaneyShape.Add(VertexToAdd);
+				UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
+				IndexCounter += 2;
 			}
-			DelaneyShape.Bounds();
+			/*
+			 * Given N points forming the cell's hull.
+			 * every 3 points traversing the hull should 
+			 * form a valid triangle (because convex).
+			 * 
+			 * we start with 1 edge known, there is at least 
+			 * two more edges. Unknown if 3 or 4 is gauranteed 
+			 * to be minimum.
+			 * 
+			 * The end point of the next edge completes the triangle.
+			 */
 
-			Mesh cellMesh = GenerateUnityMeshFromTriangleNetMesh((TMesh)DelaneyShape.Triangulate(options));
+			//Mesh cellMesh = GenerateUnityMeshFromTriangleNetMesh((TMesh)DelaneyShape.Triangulate(options));
 			// add to our mesh
 		}
 

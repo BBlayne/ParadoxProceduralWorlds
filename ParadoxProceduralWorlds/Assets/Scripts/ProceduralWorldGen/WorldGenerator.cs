@@ -230,7 +230,7 @@ public class WorldGenerator : MonoBehaviour
 
 		PolygonalNodeGraph nodeGraph = PolygonalGraphGenerator.Generate() as PolygonalNodeGraph;
 
-		Mesh VorGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI);
+		Mesh VorGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI_WIRE);
 		Mesh TriGraphMesh = nodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.DELAUNAY);
 
 		Material PointDebugMaterial = new Material(TextureGenerator.GetUnlitMaterial());
