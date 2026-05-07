@@ -416,8 +416,8 @@ public class PolygonalNodeGraph : INodeGraph
 			for (int j = 1; j < cell.Vertices.Length - 1; j++)
 			{
 				MeshIndices.Add(baseVertex + 0);
-				MeshIndices.Add(baseVertex + j);
 				MeshIndices.Add(baseVertex + j + 1);
+				MeshIndices.Add(baseVertex + j);
 			}
 		}
 
@@ -430,8 +430,10 @@ public class PolygonalNodeGraph : INodeGraph
 		OutMesh.SetVertices(MeshVertices);
 		OutMesh.SetTriangles(MeshIndices, 0);
 		OutMesh.SetUVs(0, UVs.ToArray());
-		//OutMesh.RecalculateNormals();
-		//OutMesh.RecalculateBounds();
+		OutMesh.RecalculateNormals();
+		OutMesh.RecalculateBounds();
+
+		Debug.Log("Normal[0]: " + OutMesh.normals[0].ToString());
 
 		return OutMesh;
 	}
