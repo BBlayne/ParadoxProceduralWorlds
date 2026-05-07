@@ -87,8 +87,10 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 		ContinentColours.Shuffle();
 
 		Mesh ContinentMesh = NodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI_FILLED);
-		Texture2D ContinentTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumCells(), AssignedContinentCells, ContinentColours);
-		ContinentRTex = MapUtils.RenderPolygonalMap(ContinentMesh, MapSettings.MapSize,ContinentTexMap, TextureGenerator.GetUnlitTextureMaterial());
+		ContinentMesh.name = "ContinentMesh";
+		Texture2D ContinentTexMap = TextureGenerator.GenerateContinentalTextureMap(NodeGraph.GetNumCells(), AssignedContinentCells, ContinentColours);
+
+		ContinentRTex = MapUtils.RenderPolygonalMap(ContinentMesh, MapSettings.MapSize, ContinentTexMap, TextureGenerator.GetUnlitTextureMaterial(), true);
 	}
 
 	/*
@@ -151,7 +153,8 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 		Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumCells(), AssignedTectonicPlateCells, PlateColours);
 
 		Mesh TectPlateMesh = NodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI_FILLED);
-		TectonicPlatesRTex = MapUtils.RenderPolygonalMap(TectPlateMesh, MapSettings.MapSize, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial());	}
+		TectPlateMesh.name = "TectonicPlateMesh";
+		TectonicPlatesRTex = MapUtils.RenderPolygonalMap(TectPlateMesh, MapSettings.MapSize, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial(), true);	}
 
 	/*
 	 * Functions for Continents and Plates are similar atm, but might change later,

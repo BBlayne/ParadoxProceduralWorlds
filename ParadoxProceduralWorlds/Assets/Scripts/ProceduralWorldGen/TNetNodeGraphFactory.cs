@@ -215,10 +215,12 @@ public class TNetNodeGraphFactory : INodeGraphFactory<TriangleNetTriangulator>
 
 			List<THalfEdge> CellHalfEdges = Cell.EnumerateEdges().ToList();
 			nodeGraph.Cells[i].HalfEdges = new VHalfEdge[CellHalfEdges.Count];
+			nodeGraph.Cells[i].Vertices = new VVertex[CellHalfEdges.Count];
 			for (int j = 0; j < CellHalfEdges.Count;j++)
 			{
 				nodeGraph.Cells[i].HalfEdges[j] = nodeGraph.HalfEdges[CellHalfEdges[j].ID];
 				nodeGraph.Cells[i].HalfEdges[j].Cell = nodeGraph.Cells[i];
+				nodeGraph.Cells[i].Vertices[j] = nodeGraph.VVertices[CellHalfEdges[j].Origin.ID];
 			}
 		}
 

@@ -584,7 +584,7 @@ public static class MapUtils
 			PolyMapRT = TextureGenerator.BlitMeshToRT(InMapMesh, MapSizes, InMeshMaterial, false, true);
 			if (InIsDebug)
 			{
-				TextureGenerator.SaveMapAsPNG("RenderPolygonalMapDebug", PolyMapRT);
+				TextureGenerator.SaveMapAsPNG(InMapMesh.name + "RenderPolygonalMapDebug", PolyMapRT);
 			}
 		}
 

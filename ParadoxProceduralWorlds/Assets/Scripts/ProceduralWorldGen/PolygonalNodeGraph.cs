@@ -388,59 +388,50 @@ public class PolygonalNodeGraph : INodeGraph
 		List<Vector3> MeshVertices = new List<Vector3>();
 		List<int> MeshIndices = new List<int>();
 		List<Vector2> UVs = new List<Vector2>();
-		int IndexCounter = 3;
 		for (int i = 0; i < cells.Count; i++)
 		{
 			VCell cell = cells[i];
-			List<int> cellIndices = new List<int>();
-			VHalfEdge current = cell.HalfEdge;
-			// todo figure out why vertices is null
-			//Assert.IsTrue(cell.Vertices.Length >= 3);
-			if (cell.Vertices.Length < 3)
+			if (cell == null || cell.Vertices == null || cell.Vertices.Length < 3)
 			{
-				Debug.Log("Error: Invalid sized voronoi cell...");
+				Debug.Log("Error: Either invalid Cell or Invalid vertices...");
 				continue;
-			}	
+			}
 
-			Vector2 v_0 = cell.Vertices[0].Coords;
-			MeshVertices.Add(v_0);
-			UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
-			Vector2 v_c = new Vector2();
-			Vector2 v_n = new Vector2();			
+			// Remember where this polygon starts in the global vertex buffer
+			int baseVertex = MeshVertices.Count;
+			// Add polygon vertices to global vertex list
+			for (int j = 0; j < cell.Vertices.Length; j++)
+			{
+				MeshVertices.Add(cell.Vertices[j].Coords);
+				UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
+			}
+
+            // Fan triangulation:
+            //
+            // Triangle 0: (0,1,2)
+            // Triangle 1: (0,2,3)
+            // Triangle 2: (0,3,4)
+            // etc.
+            //						
 			for (int j = 1; j < cell.Vertices.Length - 1; j++)
 			{
-
-				MeshVertices.Add(cell.Vertices[j].Coords);
-				v_c = cell.Vertices[j].Coords;
-				v_n = cell.Vertices[j + 1].Coords;
-
-				MeshIndices.Add(0);
-				MeshIndices.Add(IndexCounter - 2);
-				MeshIndices.Add(IndexCounter - 1);
-
-				UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
-				UVs.Add(new Vector2(cell.ID / (float)numCells + Offset, 0.0f));
-				IndexCounter += 2;
+				MeshIndices.Add(baseVertex + 0);
+				MeshIndices.Add(baseVertex + j);
+				MeshIndices.Add(baseVertex + j + 1);
 			}
-			/*
-			 * Given N points forming the cell's hull.
-			 * every 3 points traversing the hull should 
-			 * form a valid triangle (because convex).
-			 * 
-			 * we start with 1 edge known, there is at least 
-			 * two more edges. Unknown if 3 or 4 is gauranteed 
-			 * to be minimum.
-			 * 
-			 * The end point of the next edge completes the triangle.
-			 */
-
-			//Mesh cellMesh = GenerateUnityMeshFromTriangleNetMesh((TMesh)DelaneyShape.Triangulate(options));
-			// add to our mesh
 		}
 
-		OutMesh.vertices = MeshVertices.ToArray();
-		OutMesh.SetIndices(MeshIndices, MeshTopology.Triangles, 0);
+		// Use UInt32 indices if mesh is large
+        if (MeshVertices.Count > 65535)
+        {
+            OutMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        }
+
+		OutMesh.SetVertices(MeshVertices);
+		OutMesh.SetTriangles(MeshIndices, 0);
 		OutMesh.SetUVs(0, UVs.ToArray());
+		//OutMesh.RecalculateNormals();
+		//OutMesh.RecalculateBounds();
 
 		return OutMesh;
 	}
