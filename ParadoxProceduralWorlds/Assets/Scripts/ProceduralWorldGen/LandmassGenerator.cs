@@ -1,5 +1,6 @@
 using DataStructures.ViliWonka.KDTree;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEngine;
 
@@ -14,6 +15,23 @@ public struct MapSetting
 
 	public float LandToWaterRatio { get; set; }
 }
+
+/*
+ * Note, no gaurantee that continents won't end up adjacent
+ * thereby forming a larger continuous landmass. Etc.
+ */
+public enum EContinentSizeModes
+{
+	BALANCED, // same sized continents
+	MEGACONTINENT, // one supercontinent, everything else are island-like
+	EURASIA
+};
+
+public enum ELandmassType
+{
+	CONTINENT,
+	TECTONIC
+};
 
 public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 {
@@ -30,6 +48,15 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 	public RenderTexture ContinentRTex;
 	public RenderTexture TectonicPlatesRTex;
 
+	const int OCEAN_CONTINENT = 1;
+	// expected minimum, for Megacontinent setups the remainder represents large islands.
+	const int MIN_LAND_CONTINENTS = 3;
+
+	const float NUDGE_FACTOR = 0.1f;
+	int DebugFloodfillIterationStep = 2;
+
+	const int UNASSIGNED = -1;
+
 	public LandmassGenerator()
 	{
 		MapSetting DefaultMapSettings = new MapSetting();
@@ -37,7 +64,7 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 		DefaultMapSettings.NumberOfTectonicPlates = 5;
 		DefaultMapSettings.NumberOfContinents = 3;
 		DefaultMapSettings.MapSize = new Vector2Int(600, 600);
-		DefaultMapSettings.LandToWaterRatio = 0.5f;
+		DefaultMapSettings.LandToWaterRatio = 0.20f; // i.e 20% of tiles are land
 
 		MapSettings = DefaultMapSettings;
 	}
@@ -63,31 +90,145 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 		return InGraph;
 	}
 
+	bool GenerateBalancedContinentSizes(int numLandCells, int numLandContinents, ref List<int> ContinentSizes)
+	{
+		if (ContinentSizes == null)
+			return false;
+
+
+		for (int i = 0; i < numLandContinents; i++)
+		{
+			// get the target size of each continent
+			ContinentSizes.Add(numLandCells);
+		}		
+
+		return true;
+	}
+
+	/*
+	 * Aim to generate continents in decreasing order of size. E.g:
+	 * Asia: 50%
+	 * Europe: 10%
+	 * Africa: 15%
+	 * North America: 12%
+	 * South America: 8%
+	 * Australia: 5%
+	 * 
+	 * We'll fix the size of the first continent to 50% and then evenly
+	 * divide the remaining 50% to the remaining continents (min 2)
+	 * plus some random nudge factor to try to add variety.
+	 */
+	bool GenerateEurasianContinentSizes(int numLandCells, int numLandContinents, ref List<int> ContinentSizes)
+	{
+		if (ContinentSizes == null)
+			return false;
+
+		numLandContinents = Mathf.Max(numLandContinents, 3);
+		int EurasiaSize = Mathf.RoundToInt(numLandCells * 0.5f);
+		// get the remaining budget of cells to distribute
+		numLandCells -= EurasiaSize;
+		int Remainders = numLandContinents - 1; // the remaining continents
+		numLandCells = Mathf.RoundToInt((float)numLandCells / Remainders);
+
+		// determine a reasonable range of our nudge that scales with the map size
+		// for now something like 10% of the size of our remainder continents
+		// minimum 1.
+		// We add our nudge factor to try to avoid gaps.
+		int Nudge = Mathf.Max(Mathf.RoundToInt(NUDGE_FACTOR * numLandCells), 1);
+
+		ContinentSizes.Add(EurasiaSize);
+		for (int i = 0; i < numLandContinents - 1; i++)
+		{
+			// get the target size of each remaining continent
+			ContinentSizes.Add(numLandCells + Random.Range(0, Nudge));
+		}		
+
+		return true;
+	}
+
+	bool GenerateMegaContinentSizes(int numLandCells, int numLandContinents, ref List<int> ContinentSizes)
+	{
+		if (ContinentSizes == null)
+			return false;
+
+		numLandContinents = Mathf.Max(numLandContinents, 3);
+		int EurasiaSize = Mathf.RoundToInt(numLandCells * 0.8f);
+		// get the remaining budget of cells to distribute
+		numLandCells -= EurasiaSize;
+		int Remainders = numLandContinents - 1; // the remaining continents
+		numLandCells = Mathf.RoundToInt((float)numLandCells / Remainders);
+
+		// determine a reasonable range of our nudge that scales with the map size
+		// for now something like 10% of the size of our remainder continents
+		// minimum 1.
+		// We add our nudge factor to try to avoid gaps.
+		int Nudge = Mathf.Max(Mathf.RoundToInt(NUDGE_FACTOR * numLandCells), 1);
+
+		ContinentSizes.Add(EurasiaSize);
+		for (int i = 0; i < numLandContinents - 1; i++)
+		{
+			// get the target size of each remaining continent
+			ContinentSizes.Add(numLandCells + Random.Range(0, Nudge));
+		}		
+
+		return true;
+	}
+
 	void GenerateContinents()
 	{
+		Debug.Log("Generating continents..."); 
+
+		// we can represent the ocean as being its own "continent" blob
 		int[] InitialContinentPoints = DetermineInitialContinentCells(
-			MapSettings.NumberOfContinents, 
+			MapSettings.NumberOfContinents + OCEAN_CONTINENT, 
 			25
 		);		
 
+		/*
+			Assign each continent a target size to be the maximum bound
+			if target size is equal to map size then each continent tries 
+			to be as large as it can until it runs out of room.
+		 */
+		int numLandCells = Mathf.RoundToInt(MapSettings.LandToWaterRatio * NodeGraph.GetNumFaces());
+		int numContinents = MapSettings.NumberOfContinents; // actual number of LAND continents
 		List<int> ContinentSizes = new List<int>();
-		for (int i = 0; i < InitialContinentPoints.Length; i++)
+		EContinentSizeModes ContinentSizeMode = EContinentSizeModes.BALANCED;
+		int numOceanCells = NodeGraph.GetNumFaces() - numLandCells;
+		// have our ocean "continent" be our first entry
+		ContinentSizes.Add(numOceanCells);
+		switch (ContinentSizeMode)
 		{
-			ContinentSizes.Add(NodeGraph.GetNumFaces());
+			case EContinentSizeModes.BALANCED:
+			{
+				GenerateBalancedContinentSizes(numLandCells, numContinents, ref ContinentSizes);
+				break;
+			}
+			case EContinentSizeModes.EURASIA:
+			{
+				GenerateEurasianContinentSizes(numLandCells, numContinents, ref ContinentSizes);
+				break;
+			}
+			case EContinentSizeModes.MEGACONTINENT:
+			{
+				GenerateMegaContinentSizes(numLandCells, numContinents, ref ContinentSizes);
+				break;
+			}
 		}
-
-		// get our array of tectonic plate group ids assigned to our cells
-		int[] AssignedContinentCells = CellGroupFloodFill(InitialContinentPoints.ToList(), ContinentSizes);
 
 		// visualize
 		Vector2Int Hues = new Vector2Int(30, 330);
 		Vector2Int Saturation = new Vector2Int(99, 100);
 		Vector2Int Brightness = new Vector2Int(99, 100);
-		List<Color> ContinentColours = TextureGenerator.GenerateHSVColours(MapSettings.NumberOfContinents + 1, Hues, Saturation, Brightness);
+		List<Color> ContinentColours = TextureGenerator.GenerateHSVColours(MapSettings.NumberOfContinents + OCEAN_CONTINENT, Hues, Saturation, Brightness);
 		ContinentColours.Shuffle();
+		ContinentColours[0] = Color.blue; // ocean
 
 		Mesh ContinentMesh = NodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI_FILLED);
 		ContinentMesh.name = "ContinentMesh";
+
+		// get our array of continent group ids assigned to our cells
+		int[] AssignedContinentCells = CellGroupFloodFill(ELandmassType.CONTINENT, InitialContinentPoints.ToList(), ContinentSizes, ContinentColours, ContinentMesh, DebugMapEnabled);		
+
 		Texture2D ContinentTexMap = TextureGenerator.GenerateContinentalTextureMap(NodeGraph.GetNumCells(), AssignedContinentCells, ContinentColours);
 
 		ContinentRTex = MapUtils.RenderPolygonalMap(ContinentMesh, MapSettings.MapSize, ContinentTexMap, TextureGenerator.GetUnlitTextureMaterial(), true);
@@ -99,6 +240,8 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 	 */
 	int[] DetermineInitialContinentCells(int InNumContinents, int InPadding)
 	{
+		Debug.Log("Determining initial Continental points..."); 
+
 		// Select a number of sites that are evenly spread
 		List<int> OutContinentSites = new List<int>();
 
@@ -128,6 +271,8 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 
 	void GenerateTectonicPlates()
 	{
+		Debug.Log("Generating Tectonic Plates..."); 
+
 		int[] InitialPlatePoints = DetermineInitialTectonicPlatePoints(
 			MapSettings.NumberOfTectonicPlates, 
 			MapSettings.MapSize,
@@ -140,21 +285,23 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 			PlateSizes.Add(NodeGraph.GetNumFaces());
 		}
 
-		// get our array of tectonic plate group ids assigned to our cells
-		int[] AssignedTectonicPlateCells = CellGroupFloodFill(InitialPlatePoints.ToList(), PlateSizes);
-
 		// visualize
 		Vector2Int Hues = new Vector2Int(30, 330);
 		Vector2Int Saturation = new Vector2Int(99, 100);
 		Vector2Int Brightness = new Vector2Int(99, 100);
-		List<Color> PlateColours = TextureGenerator.GenerateHSVColours(MapSettings.NumberOfTectonicPlates + 1, Hues, Saturation, Brightness);
+		List<Color> PlateColours = TextureGenerator.GenerateHSVColours(MapSettings.NumberOfTectonicPlates, Hues, Saturation, Brightness);
 		PlateColours.Shuffle();
-
-		Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumCells(), AssignedTectonicPlateCells, PlateColours);
 
 		Mesh TectPlateMesh = NodeGraph.GenerateUnityMeshFromGraph(EUnityMeshMode.VORONOI_FILLED);
 		TectPlateMesh.name = "TectonicPlateMesh";
-		TectonicPlatesRTex = MapUtils.RenderPolygonalMap(TectPlateMesh, MapSettings.MapSize, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial(), true);	}
+
+		// get our array of tectonic plate group ids assigned to our cells
+		int[] AssignedTectonicPlateCells = CellGroupFloodFill(ELandmassType.TECTONIC, InitialPlatePoints.ToList(), PlateSizes, PlateColours, TectPlateMesh, false);
+
+		Texture2D PlateTexMap = TextureGenerator.GenerateTectonicPlateTextureMap(NodeGraph.GetNumCells(), AssignedTectonicPlateCells, PlateColours);
+
+		TectonicPlatesRTex = MapUtils.RenderPolygonalMap(TectPlateMesh, MapSettings.MapSize, PlateTexMap, TextureGenerator.GetUnlitTextureMaterial(), true);	
+	}
 
 	/*
 	 * Functions for Continents and Plates are similar atm, but might change later,
@@ -162,6 +309,7 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 	 */
 	int[] DetermineInitialTectonicPlatePoints(int InNumPlates, Vector2Int InPadding, bool bIsRandom)
 	{
+		Debug.Log("Determining initial Tectonic Plate Points..."); 
 		// Select a number of sites that are evenly spread
 		List<int> OutPlateSites = new List<int>();
 
@@ -195,7 +343,7 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 	/// <param name="InInitialCells">The initial selection of cells to flood fill from</param>
 	/// <param name="InTargetSizes">Target size of the passed in groups</param>
 	/// <returns>List of Tectonic Plate IDs (starting from 1, 0 is reserved) for each Cell ID</returns>
-	public int[] CellGroupFloodFill(List<int> InInitialCells, List<int> InTargetSizes)
+	public int[] CellGroupFloodFill(ELandmassType InLandtype, List<int> InInitialCells, List<int> InTargetSizes, List<Color> InCellColours, Mesh InCellMesh, bool InDebugEnabled)
 	{
 		/*
 		 * Basic idea is we want to randomly fill the continents so they form interesting
@@ -206,14 +354,21 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 		if (NodeGraph == null)
 			return null;
 
-		int DebugIterationStep = 2;
-
-		// Colours for Visualization purposes aimed for sufficient contrast
-		Vector2Int Hues = new Vector2Int(30, 330);
-		Vector2Int Saturation = new Vector2Int(99, 100);
-		Vector2Int Brightness = new Vector2Int(99, 100);
-		List<Color> DebugColours = TextureGenerator.GenerateHSVColours(InInitialCells.Count + 1, Hues, Saturation, Brightness);
-		DebugColours[0] = Color.black;
+		string landtype = "Unknown";
+		switch (InLandtype)
+		{
+			case ELandmassType.CONTINENT:
+			{
+				landtype = "Continent";
+				break;
+			}
+			case ELandmassType.TECTONIC:
+			{
+				landtype = "Tectonic";
+				break;
+			}
+		}
+		Debug.Log("Flood Filling Landmass: " + landtype + " Cells...");
 
 		int MaxCells = NodeGraph.GetNumCells();
 		if (MaxCells <= 0)
@@ -225,13 +380,20 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 		int NumCellGroups = InInitialCells.Count;
 		HashSet<int> ClosedList = new HashSet<int>();
 		Heap<PriorityVCell> Frontier = new Heap<PriorityVCell>(MaxCells);
-		int[] CellsToBeFilled = new int[MaxCells];
+		int[] AssignedCells = new int[MaxCells];
+		// 
+		for (int i = 0; i < MaxCells; i++)
+		{
+			AssignedCells[i] = UNASSIGNED;
+		}
+
 		int[] GroupCellCounter = new int[NumCellGroups];
 
+		// fill our frontier with our initial sites
 		for (int i = 0; i < NumCellGroups; i++)
 		{
 			Frontier.Add(new PriorityVCell(InInitialCells[i], InInitialCells[i], i));
-			CellsToBeFilled[InInitialCells[i]] = i + 1;
+			AssignedCells[InInitialCells[i]] = i;
 			ClosedList.Add(InInitialCells[i]);
 			GroupCellCounter[i] = 1;
 		}
@@ -247,7 +409,7 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 			}
 
 			int CurrentFaceIndex = CurrentCell.CellIndex;
-			int CurrentCellGroupID = CellsToBeFilled[CurrentCell.CellParentIndex];
+			int CurrentCellGroupID = AssignedCells[CurrentCell.CellParentIndex];
 			// In case we have fake faces inserted by our voronoi library
 			// We'll keep popping until we have another valid one.
 			while (CurrentFaceIndex < 0)
@@ -260,12 +422,14 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 			}
 
 			// Check if the current grouping is full
-			CellsToBeFilled[CurrentFaceIndex] = CurrentCellGroupID;
-			if (GroupCellCounter[CurrentCellGroupID - 1] >= InTargetSizes[CurrentCellGroupID - 1])
+			AssignedCells[CurrentFaceIndex] = CurrentCellGroupID;
+			GroupCellCounter[CurrentCellGroupID]++; // increment cell group
+			if (GroupCellCounter[CurrentCellGroupID ] >= InTargetSizes[CurrentCellGroupID])
 			{
 				continue;
 			}
 
+			// add all adjacent cells to the frontier
 			VCell CellData = NodeGraph.Cells[CurrentFaceIndex];
 			foreach (var NeighbourCell in CellData.Neighbours)
 			{
@@ -282,21 +446,43 @@ public class LandmassGenerator : IMapGenerator<PolygonalNodeGraph>
 			}
 
 			// Debug Images
-			if (DebugMapEnabled && (Iteration % DebugIterationStep == 0))
-			{
-				if (CellMesh != null)
+			if (InDebugEnabled && (Iteration % DebugFloodfillIterationStep == 0))
+			{				
+				if (InCellMesh != null)
 				{
-					MapUtils.RenderPolygonalMap("DebugContinents" + Iteration, CellMesh,
-						TextureGenerator.GenerateContinentalTextureMap(MaxCells, CellsToBeFilled, DebugColours),
-						TextureGenerator.GetUnlitTextureMaterial()
+					Texture2D floodfillDebugTexture = null;
+					switch (InLandtype)
+					{
+						case ELandmassType.CONTINENT:
+						{
+							Debug.Log("Generating Continental Texture Mapping Texture...");
+							floodfillDebugTexture = TextureGenerator.GenerateContinentalTextureMap(MaxCells, AssignedCells, InCellColours);
+							break;
+						}
+						case ELandmassType.TECTONIC:
+						{
+							Debug.Log("Generating Tectonic Texture Mapping Texture...");
+							floodfillDebugTexture = TextureGenerator.GenerateTectonicPlateTextureMap(MaxCells, AssignedCells, InCellColours);
+							break;
+						}
+					}
+
+					string relative_filenames = InCellMesh.name + "Debug/" + InCellMesh.name + Iteration;
+					Debug.Log("Rendering Polygonal Map, Iteration: " + Iteration);
+					RenderTexture DebugRTex = MapUtils.RenderPolygonalMap(relative_filenames, MapSettings.MapSize, InCellMesh,
+						floodfillDebugTexture,
+						TextureGenerator.GetUnlitTextureMaterial(),
+						InDebugEnabled
 					);
+
+					MapUtils.SaveMapAsPNG(relative_filenames, DebugRTex);
 				}
 			}
 
 			Iteration++;
 		}
 
-		return CellsToBeFilled;
+		return AssignedCells;
 	}
 
 	RenderTexture RenderArrows(Vector2Int InMapSize, Mesh InMapMesh, Color InArrowColour, bool InIsDebug)

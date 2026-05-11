@@ -12,6 +12,7 @@ using Jobberwocky.GeometryAlgorithms.Source.API;
 using Jobberwocky.GeometryAlgorithms.Source.Core;
 using Jobberwocky.GeometryAlgorithms.Source.Parameters;
 
+
 public static class TextureGenerator
 {
     public static string AppPath = Application.dataPath + "/../ExportedImages/";
@@ -260,6 +261,7 @@ public static class TextureGenerator
 
     public static RenderTexture BlitMeshToRT(Mesh InMesh, Vector2Int InMapSizes, Material InMat, bool InWireframe, bool bIsTransparentBG)
     {
+		Debug.Log("Blitting Mesh to Render Texture...");
         RenderTexture outRTex = new RenderTexture(InMapSizes.x, InMapSizes.y, 0, RenderTextureFormat.ARGB32);
         GL.wireframe = false;
         Nothke.Utils.RTUtils.BeginPixelRendering(outRTex);
@@ -910,7 +912,8 @@ public static class TextureGenerator
                 (uint)height
             );
 
-            using (var filestream = new FileStream(path + InName, FileMode.Create))
+			string final_path = Path.Combine(path, InName);
+            using (var filestream = new FileStream(final_path, FileMode.Create))
             {
                 await filestream.WriteAsync(bytes, 0, bytes.Length);
             }
@@ -1037,7 +1040,7 @@ public static class TextureGenerator
         return temp;
     }
 
-    public static Texture2D GenerateContinentalTextureMap(int InNuMCells, int[] InCellByID, List<Color> InColours)
+    public static Texture2D GenerateContinentalTextureMap(int InNuMCells, int[] InCellByID, List<Color> InColours, bool Debug = false)
     {
         Texture2D OutTex = new Texture2D(InNuMCells, 1, TextureFormat.RGBA32, false);
         OutTex.filterMode = FilterMode.Point;
@@ -1047,18 +1050,27 @@ public static class TextureGenerator
 
         for (int i = 0; i < InNuMCells; i++)
         {
-            CellColours.Add(InColours[InCellByID[i]]);
+			if (InCellByID[i] >= 0)
+			{
+				CellColours.Add(InColours[InCellByID[i]]);
+				continue;
+			}
+            
+			CellColours.Add(Color.black);
         }
 
         OutTex.SetPixels(CellColours.ToArray());
         OutTex.Apply();
 
-        SaveMapAsPNG("ContinentalTextureMap", OutTex);
+		if (Debug)
+		{
+			SaveMapAsPNG("ContinentalTextureMap", OutTex);
+		}
 
         return OutTex;
     }
 
-    public static Texture2D GenerateTectonicPlateTextureMap(int InNuMCells, int[] InCellByID, List<Color> InColours)
+    public static Texture2D GenerateTectonicPlateTextureMap(int InNuMCells, int[] InCellByID, List<Color> InColours, bool Debug = false)
     {
         Texture2D OutTex = new Texture2D(InNuMCells, 1, TextureFormat.RGBA32, false);
         OutTex.filterMode = FilterMode.Point;
@@ -1074,7 +1086,10 @@ public static class TextureGenerator
         OutTex.SetPixels(CellColours);
         OutTex.Apply(false);
 
-        SaveMapAsPNG("TectonicPlateTextureMapV2", OutTex);
+		if (Debug)
+		{
+			SaveMapAsPNG("TectonicPlateTextureMapV2", OutTex);
+		}        
 
         return OutTex;
     }
@@ -1161,11 +1176,17 @@ public static class TextureGenerator
     {
         if (InTex != null)
         {
+			string folderPath = Path.Combine(AppPath, InFileName + ".png");
+			string directory = Path.GetDirectoryName(folderPath);
+			string directory_path = Path.Combine(AppPath,directory);
+			string filename = Path.GetFileName(folderPath);
+			Directory.CreateDirectory(directory_path);
+
             // attempting C# aync functionality
             await TextureGenerator.SaveTextureAsPng(
                 TextureGenerator.CreateTexture2D(InTex),
-                AppPath,
-                InFileName + ".png"
+                directory_path,
+                filename
             );
         }
     }

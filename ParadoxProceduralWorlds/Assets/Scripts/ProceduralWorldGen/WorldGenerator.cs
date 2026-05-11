@@ -248,11 +248,12 @@ public class WorldGenerator : MonoBehaviour
 		PolyMapRT = VoronoiGraphRTex;
 
 		LandmassGenerator landmassGenerator = new LandmassGenerator();
+		landmassGenerator.DebugMapEnabled = true;
 		landmassGenerator.Generate(nodeGraph);
 
-		if (landmassGenerator.TectonicPlatesRTex != null)
+		if (landmassGenerator.ContinentRTex != null)
 		{
-			UpdateMapDisplay(landmassGenerator.TectonicPlatesRTex, RenderTextureSizes);
+			UpdateMapDisplay(landmassGenerator.ContinentRTex, RenderTextureSizes);
 			SaveMapAsPNG("TestTectonicPlatesMap_RTex", landmassGenerator.TectonicPlatesRTex);
 			SaveMapAsPNG("TestContinentPlatesMap_RTex", landmassGenerator.ContinentRTex);
 		}
