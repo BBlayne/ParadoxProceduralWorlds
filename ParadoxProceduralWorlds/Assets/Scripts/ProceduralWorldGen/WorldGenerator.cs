@@ -4,6 +4,19 @@ using UnityEngine;
 using TMesh = TriangleNet.Mesh;
 using TriangleNet.Voronoi;
 using TMPro;
+using System;
+
+public static class WorldEvents
+{
+    // Static global event
+    public static Action OnWorldMapGenerationFinished;
+
+    // Optional helper function for invoking safely
+    public static void BroadcastWorldMapGenerationFinished()
+    {
+        OnWorldMapGenerationFinished?.Invoke();
+    }
+}
 
 public class WorldGenerator : MonoBehaviour
 {
@@ -39,6 +52,18 @@ public class WorldGenerator : MonoBehaviour
 		set
 		{
 			worldSettings = value;
+		}
+	}
+
+	private static WorldGenerator Instance = null;
+	public static WorldGenerator WorldGeneratorInstance
+	{
+		get { 
+			if (Instance == null)
+			{
+				Instance = new WorldGenerator();
+			}
+			return Instance; 
 		}
 	}
 
@@ -116,6 +141,8 @@ public class WorldGenerator : MonoBehaviour
 	public delegate void OnRegionsGeneratedDelegate(RegionGenerator.RegionDebugInfo regionDebugInfo);
 	public static OnRegionsGeneratedDelegate regionsGeneratedDelegate;
 
+	public World CurrentWorld;
+
 	void OnDrawGizmos()
 	{
 		//Gizmos.color = Color.white;
@@ -154,13 +181,27 @@ public class WorldGenerator : MonoBehaviour
 
 		AppPath = Application.dataPath + "/../ExportedImages/";
 
-
+		CurrentWorld = new World();
 
 		_oldWorldSettings = worldSettings;
 
 		//GenerateWorld();
 
 		GenerateWorld2();
+	}
+
+	void Awake()
+	{
+		if (Instance == null)
+		{
+			Instance = this;
+		}
+		else if (Instance != this)
+		{
+			Destroy(this);
+		}
+
+		DontDestroyOnLoad(this);
 	}
 
 	public void GenerateWorld2()
@@ -260,7 +301,11 @@ public class WorldGenerator : MonoBehaviour
 		else
 		{
 			UpdateMapDisplay(PolyMapRT, RenderTextureSizes);
-		}		
+		}
+
+		CurrentWorld.nodeGraph = nodeGraph;
+
+		WorldEvents.BroadcastWorldMapGenerationFinished();
 	}
 
 	public void GenerateWorld()
@@ -326,7 +371,7 @@ public class WorldGenerator : MonoBehaviour
 		int NumDirections = (int)EPlateDirections.NUM_DIRECTIONS;
 		for (int i = 0; i < NumTectonicPlates; i++)
 		{
-			int Direction = Random.Range(0, NumDirections);
+			int Direction = UnityEngine.Random.Range(0, NumDirections);
 			EPlateDirections PlateDirection = (EPlateDirections)Direction;
 			PlateDirections[i] = PlateDirection;
 		}
@@ -442,7 +487,7 @@ public class WorldGenerator : MonoBehaviour
 		{
 			if (VorFace.ID != -1 && VorFace.bounded)
 			{
-				float Jitter = Random.Range(-PoissonRadius / 2, PoissonRadius / 2);
+				float Jitter = UnityEngine.Random.Range(-PoissonRadius / 2, PoissonRadius / 2);
 				float NuEcks = (float)VorFace.generator.X + Jitter;
 				float NuWhy = (float)VorFace.generator.Y + Jitter;
 				OutPlateSites.Add(new Vector3(NuEcks, NuWhy));
@@ -514,7 +559,9 @@ public class WorldGenerator : MonoBehaviour
 		{
 			InMapRtx.filterMode = FilterMode.Point;
 
+			mapDisplay.UpdateMapDisplayTexture(TextureGenerator.CreateTexture2D(InMapRtx));
 			mapDisplay.MapDisplayImgTarget.texture = InMapRtx;
+			mapDisplay.CurrentDisplayTex = TextureGenerator.CreateTexture2D(InMapRtx);
 			mapDisplay.UpdateMapDisplayRatio(InWorldSizes.x, InWorldSizes.y);
 		}
 	}
@@ -601,5 +648,27 @@ public class WorldGenerator : MonoBehaviour
 				UpdateMapDisplay(_silhouetteMap, new Vector2Int(worldSettings._worldWidth, worldSettings._worldHeight));
 			}
 		}
+	}
+
+	public VCell GetCellFromUV(Vector2 uvs)
+	{
+		if (mapDisplay == null && 
+			CurrentWorld != null && 
+			CurrentWorld.nodeGraph != null
+			)
+		{
+			return null;
+		}			
+
+		Texture2D tex = mapDisplay.CurrentDisplayTex;
+		Vector2Int pixelCoords = MapUtils.UVToPixel(uvs, tex);
+
+		int CellID = CurrentWorld.nodeGraph.GetCellIDFromCoordinate(uvs);
+		if (CellID != -1 && CellID >= 0 && CellID < CurrentWorld.nodeGraph.GetNumCells()) 
+		{
+			return CurrentWorld.nodeGraph.Cells[CellID];
+		}
+
+		return null;
 	}
 }

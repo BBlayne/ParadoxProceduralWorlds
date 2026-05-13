@@ -17,8 +17,8 @@ public class CameraController : MonoBehaviour
     {
         get {
             if (_instance == null)
-            {
-                _instance = GameObject.FindObjectOfType<CameraController>();
+            {				
+                _instance = (CameraController)FindAnyObjectByType(typeof(CameraController));
 
                 if (_instance == null)
                 {

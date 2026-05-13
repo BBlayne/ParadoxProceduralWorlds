@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Linq;
 using TriangleNet.Voronoi;
 using UnityEngine;
+using UnityEngine.AdaptivePerformance.Provider;
+using UnityEngine.UI;
 using static UnityEditor.PlayerSettings;
 using TFace = TriangleNet.Topology.DCEL.Face;
 using THalfEdge = TriangleNet.Topology.DCEL.HalfEdge;
@@ -629,4 +631,61 @@ public static class MapUtils
 			);
 		}
 	}
+
+    public static Vector2Int UVToPixel(Vector2 uv, Texture2D tex)
+    {
+        int x = Mathf.FloorToInt(uv.x * tex.width);
+        int y = Mathf.FloorToInt(uv.y * tex.height);
+
+        // Clamp in case UVs land exactly on edge
+        x = Mathf.Clamp(x, 0, tex.width - 1);
+        y = Mathf.Clamp(y, 0, tex.height - 1);
+
+        return new Vector2Int(x, y);
+    }
+
+    public static Vector2 PixelToUV(Vector2 pixelCoord, Texture2D texture)
+    {
+		float u = (float)pixelCoord.x / texture.width;
+		float v = (float)pixelCoord.y / texture.height;
+
+		return new Vector2(u, v);
+    }
+
+    public static bool ScreenToUV(
+        RawImage image,
+        Vector2 screenPos,
+        Camera uiCamera,
+        out Vector2 uv)
+    {
+        uv = Vector2.zero;
+
+        RectTransform rectTransform =
+            image.rectTransform;
+
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                rectTransform,
+                screenPos,
+                uiCamera,
+                out Vector2 localPoint))
+        {
+            return false;
+        }
+
+        Rect rect = rectTransform.rect;
+
+        float u = Mathf.InverseLerp(
+            rect.xMin,
+            rect.xMax,
+            localPoint.x);
+
+        float v = Mathf.InverseLerp(
+            rect.yMin,
+            rect.yMax,
+            localPoint.y);
+
+        uv = new Vector2(u, v);
+
+        return true;
+    }
 }
